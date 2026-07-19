@@ -330,7 +330,28 @@
           <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••">
         </label>
         <button class="button primary login-submit" type="submit">Đăng nhập →</button>
+        <button id="showCustomerRegistration" class="button secondary login-submit" type="button">+ Tạo hồ sơ khách hàng mới</button>
         <p id="loginError" class="login-error"></p>
+      </form>
+      <form id="customerRegistrationForm" class="login-card hidden" autocomplete="on">
+        <span class="eyebrow">Khách hàng mới</span>
+        <h1>Tạo hồ sơ doanh nghiệp</h1>
+        <p class="muted" style="margin:0;">Tự nhập thông tin cơ bản; RM sẽ đối chiếu trước mọi bước thẩm định.</p>
+        <label class="login-field">Tên doanh nghiệp
+          <input id="registerCompanyName" required minlength="2" maxlength="300" autocomplete="organization">
+        </label>
+        <label class="login-field">Mã số thuế
+          <input id="registerTaxCode" required minlength="3" maxlength="30" inputmode="numeric">
+        </label>
+        <label class="login-field">Ngành nghề chính
+          <input id="registerIndustry" maxlength="300">
+        </label>
+        <label class="login-field">Người liên hệ
+          <input id="registerContact" maxlength="200" autocomplete="name">
+        </label>
+        <button class="button primary login-submit" type="submit">Tạo hồ sơ →</button>
+        <button id="showLogin" class="login-switch" type="button">← Quay lại đăng nhập</button>
+        <p id="registrationError" class="login-error" aria-live="polite"></p>
       </form>
     </div>
   </section>
@@ -601,7 +622,7 @@
       <div class="customer-grid">
         <main class="customer-main">
           <section class="panel">
-          <div class="panel-title"><div><span class="eyebrow">THÔNG TIN DOANH NGHIỆP</span><h2>Phiếu nhu cầu Minh Phát</h2><p>Điền đủ thông tin giúp RM không phải hỏi lại nhiều lần.</p></div></div>
+          <div class="panel-title"><div><span class="eyebrow">THÔNG TIN DOANH NGHIỆP</span><h2 id="customerProfileTitle">Phiếu nhu cầu doanh nghiệp</h2><p>Điền đủ thông tin giúp RM không phải hỏi lại nhiều lần.</p></div></div>
           <div class="form-grid">
             <label class="field span-2">Tên doanh nghiệp<input id="customerCompanyName" value="Công ty Cổ phần Thiết bị Minh Phát"></label>
             <label class="field">Mã số thuế<input id="customerTaxCode" value="0109988665"></label>

@@ -8,7 +8,24 @@ on:
 jobs:
   python-tests:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vaic_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
+      # The V2 state store is PostgreSQL-only (app/storage/pg.py raises at
+      # import time without it); point it at the service container above.
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/vaic_test"
       # Embeddings default key-free "local" provider so CI runs offline
       # / zero API keys reproducible. Set KNOWLEDGE_EMBEDDING_PROVIDER
       # / RAG_MCP_EMBEDDING_PROVIDER to "gemini" (Google AI Studio key
@@ -37,6 +54,18 @@ jobs:
 
       - name: Ensure state dir exists (sqlite-backed tests)
         run: mkdir -p data/state
+
+      # Seed must run before the SQL migrations: 001_extend_credit_requests.sql
+      # UPDATEs the `permissions` table, which only the seed script creates.
+      - name: Seed enterprise mirror (CRM/IAM/SSO demo cast)
+        run: python -m tools.seed_postgres_enterprise
+
+      - name: Apply PostgreSQL schema migrations
+        run: |
+          for f in scripts/migrations/*.sql; do
+            echo "Applying $f"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
 
       - name: Validate config imports cleanly
         run: python -c "from app.config import settings; print('RAG_PROVIDER=', settings.RAG_PROVIDER)"

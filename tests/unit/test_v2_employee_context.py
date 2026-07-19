@@ -283,7 +283,11 @@ def test_personalization_failure_does_not_change_permissions(client, monkeypatch
     body = resp.json()
     # Same permissions/customer_scope as the non-degraded case -- a
     # personalization outage must never touch IAM-derived authorization.
-    assert body["authorization_context"]["permissions"] == ["case:read", "case:write", "approval:request"]
+    # RM permissions grew credit:forward + credit:appraise with the bank-staff
+    # role merge (RM now appraises directly; see app/integrations/pg.py).
+    assert body["authorization_context"]["permissions"] == [
+        "case:read", "case:write", "approval:request", "credit:forward", "credit:appraise",
+    ]
     assert set(body["authorization_context"]["customer_scope"]) == {"COMP-ABC", "COMP-XYZ", "COMP-MP"}
 
 
@@ -326,10 +330,13 @@ def test_disabled_personalization_excludes_habits_from_context(client):
 
 
 def test_deleted_habit_is_not_reused(client, isolated_employee_db):
-    # Seed a confirmed habit directly (isolated DB -- safe to mutate).
+    # Seed a confirmed habit directly. psycopg2 connections (unlike sqlite3)
+    # have no .execute() shortcut, so go through a cursor; ON CONFLICT keeps
+    # the seed idempotent on the shared Postgres store.
     conn = employee_db.get_db_connection()
-    conn.execute(
+    conn.cursor().execute(
         "INSERT INTO employee_habits VALUES ('HABIT-X','RM-999','review_sequence','[]','confirmed',5,0.9,'2026-01-01T00:00:00',NULL)"
+        " ON CONFLICT (habit_id) DO NOTHING"
     )
     conn.commit()
     conn.close()
@@ -345,8 +352,9 @@ def test_deleted_habit_is_not_reused(client, isolated_employee_db):
 
 def test_document_content_cannot_create_employee_habit(client, isolated_employee_db):
     conn = employee_db.get_db_connection()
-    conn.execute(
+    conn.cursor().execute(
         "INSERT INTO employee_habits VALUES ('HABIT-CAND','RM-999','default_email_template','\"x\"','candidate',3,0.5,NULL,NULL)"
+        " ON CONFLICT (habit_id) DO NOTHING"
     )
     conn.commit()
     conn.close()
@@ -366,8 +374,9 @@ def test_cross_employee_context_cache_isolation(client):
 
 def test_cross_employee_habit_deletion_is_rejected(client, isolated_employee_db):
     conn = employee_db.get_db_connection()
-    conn.execute(
+    conn.cursor().execute(
         "INSERT INTO employee_habits VALUES ('HABIT-OWNED','RM-999','review_sequence','[]','confirmed',5,0.9,'2026-01-01T00:00:00',NULL)"
+        " ON CONFLICT (habit_id) DO NOTHING"
     )
     conn.commit()
     conn.close()

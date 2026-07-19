@@ -24,7 +24,9 @@ def test_agent_recommends_clean_request_without_approving_it():
 
     assert result["recommendation"] == "recommend"
     assert result["score"] == 100
-    assert "Credit Specialist" in result["summary"]
+    # Role merge: the appraisal is advisory; the final decision now sits with
+    # the Manager (was previously phrased around the Credit Specialist).
+    assert "thuộc Manager" in result["summary"]
 
 
 def test_agent_flags_high_risk_request_for_human_decision():
@@ -50,4 +52,5 @@ def test_agent_recommends_services_without_approving(monkeypatch):
     assert result["source"] == "rule"
     assert "Vốn lưu động / hạn mức tín dụng" in names
     assert "LC / Bảo lãnh thanh toán quốc tế" in names
-    assert "Credit Specialist" in result["summary"]
+    # Role merge: services are picked by the RM now, not a separate specialist.
+    assert "RM chọn dịch vụ" in result["summary"]

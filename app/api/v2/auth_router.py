@@ -11,7 +11,12 @@ from pydantic import BaseModel, Field
 from app.auth import issue_session_token
 from app.config import settings
 from app.integrations.enterprise import SQLiteSSOAdapter
+from app.integrations.pg import PostgresSSOAdapter
 from app.integrations.errors import ContextError
+
+
+def _sso_adapter():
+    return PostgresSSOAdapter() if settings.DATABASE_URL else SQLiteSSOAdapter()
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -36,7 +41,7 @@ def login(body: LoginRequest, x_session_id: Optional[str] = Header(None)) -> Log
     if not settings.DEMO_AUTH_ENABLED or body.password != settings.DEMO_LOGIN_PASSWORD:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "INVALID_CREDENTIALS", "message": "Sai tai khoan hoac mat khau."})
     try:
-        identity = SQLiteSSOAdapter().get_employee_identity(body.employee_id.upper(), correlation_id=f"TRACE-{uuid.uuid4().hex.upper()}")
+        identity = _sso_adapter().get_employee_identity(body.employee_id.upper(), correlation_id=f"TRACE-{uuid.uuid4().hex.upper()}")
     except ContextError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "INVALID_CREDENTIALS", "message": "Sai tai khoan hoac mat khau."})
     token_ttl = settings.AUTH_TOKEN_TTL_SECONDS

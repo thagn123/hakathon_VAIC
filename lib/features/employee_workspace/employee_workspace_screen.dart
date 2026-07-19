@@ -40,6 +40,11 @@ class _EmployeeWorkspaceScreenState extends State<EmployeeWorkspaceScreen> {
                 child: Center(child: Text(controller.context!.authorizationContext.primaryRole)),
               ),
             IconButton(
+              icon: const Icon(Icons.request_page_outlined),
+              tooltip: 'Yêu cầu tín dụng',
+              onPressed: () => context.push('/credit-requests'),
+            ),
+            IconButton(
               icon: const Icon(Icons.logout),
               tooltip: 'Đăng xuất',
               onPressed: () {

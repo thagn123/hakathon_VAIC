@@ -10,6 +10,8 @@ from __future__ import annotations
 import uuid
 from typing import Any, Dict, Iterable, List, Optional
 
+from app.schemas.v2.credit_request import CorporateCreditRequestCreate
+
 
 class CreditReadinessService:
     REQUIRED_CREDIT_FACTS = (
@@ -18,6 +20,109 @@ class CreditReadinessService:
         "has_bad_debt_12m",
         "ubo_status",
     )
+
+    def appraise_request(self, request: CorporateCreditRequestCreate) -> Dict[str, Any]:
+        """Create a transparent recommendation; never make the final decision."""
+        score = 100
+        findings: List[str] = []
+        cic = request.cic_debt_classification.lower()
+
+        if "nhóm 1" not in cic and "group 1" not in cic:
+            score -= 40
+            findings.append("CIC không thuộc Nhóm 1.")
+        if request.debt_to_equity_ratio > 3:
+            score -= 25
+            findings.append("Tỷ số D/E lớn hơn 3.")
+        if request.net_profit_billion_vnd <= 0:
+            score -= 20
+            findings.append("Lợi nhuận sau thuế không dương.")
+
+        requested_billion = request.requested_amount_vnd / 1_000_000_000
+        if request.request_type in {"loan", "both"} and request.collateral_value_billion_vnd < requested_billion:
+            score -= 15
+            findings.append("Giá trị tài sản bảo đảm thấp hơn số tiền đề nghị.")
+
+        score = max(score, 0)
+        recommendation = "recommend" if score >= 80 else "conditional" if score >= 60 else "not_recommended"
+        if not findings:
+            findings.append("Không phát hiện cảnh báo định lượng từ dữ liệu khách hàng cung cấp.")
+
+        return {
+            "score": score,
+            "recommendation": recommendation,
+            "summary": (
+                f"Agent chấm điểm sơ bộ {score}/100 ({recommendation}). "
+                + " ".join(findings)
+                + " Đây chỉ là khuyến nghị; quyết định giải ngân cuối cùng thuộc Manager."
+            ),
+        }
+
+    def recommend_services(self, request: CorporateCreditRequestCreate) -> Dict[str, Any]:
+        """Second agent pass: cross-sell services for the Credit Specialist queue.
+
+        LLM picks/justifies from a fixed catalog when configured; otherwise the
+        deterministic rules below run (allowlist means the LLM can't invent a
+        product beyond these).
+        """
+        from app.credit.service_advisory_llm import ServiceAdvisoryRuntime
+
+        llm_result = ServiceAdvisoryRuntime().advise({
+            "request_type": request.request_type,
+            "requested_amount_vnd": float(request.requested_amount_vnd),
+            "industry": request.industry,
+            "net_revenue_billion_vnd": float(request.net_revenue_billion_vnd),
+            "casa_avg_balance_billion_vnd": float(request.casa_avg_balance_billion_vnd),
+            "collateral_value_billion_vnd": float(request.collateral_value_billion_vnd),
+            "cic_debt_classification": request.cic_debt_classification,
+        })
+        if llm_result is not None:
+            return llm_result
+
+        services: List[Dict[str, Any]] = []
+        casa = float(request.casa_avg_balance_billion_vnd)
+        revenue = float(request.net_revenue_billion_vnd)
+        industry = request.industry.lower()
+
+        if request.request_type in {"loan", "both"}:
+            services.append({
+                "service": "Vốn lưu động / hạn mức tín dụng",
+                "priority": "high",
+                "reason": "Khách đề nghị khoản vay; cấu trúc hạn mức giúp linh hoạt giải ngân.",
+            })
+        if casa < max(revenue * 0.02, 1.0):
+            services.append({
+                "service": "Gói quản lý dòng tiền / CASA",
+                "priority": "high",
+                "reason": "Số dư CASA thấp so với doanh thu; cần tăng dòng tiền qua SHB.",
+            })
+        if any(token in industry for token in ("xuất", "nhập", "export", "import", "thương mại")):
+            services.append({
+                "service": "LC / Bảo lãnh thanh toán quốc tế",
+                "priority": "medium",
+                "reason": "Ngành gắn thương mại quốc tế; phù hợp LC và bảo lãnh.",
+            })
+        if float(request.collateral_value_billion_vnd) > 0:
+            services.append({
+                "service": "Bảo hiểm tài sản đảm bảo",
+                "priority": "medium",
+                "reason": "Có TSĐB; nên gắn bảo hiểm để bảo vệ giá trị thế chấp.",
+            })
+        if request.request_type in {"service", "both"} or not services:
+            services.append({
+                "service": "Internet Banking doanh nghiệp / chi hộ lương",
+                "priority": "low",
+                "reason": "Dịch vụ nền tảng giúp giữ quan hệ giao dịch hàng ngày.",
+            })
+
+        names = ", ".join(item["service"] for item in services[:3])
+        return {
+            "services": services,
+            "summary": (
+                f"[Rule] Agent đề xuất {len(services)} dịch vụ đi kèm (ưu tiên: {names}). "
+                "Chỉ là khuyến nghị; RM chọn dịch vụ phù hợp khi bổ sung tờ trình."
+            ),
+            "source": "rule",
+        }
 
     def analyze(
         self,

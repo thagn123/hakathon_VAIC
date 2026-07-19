@@ -20,7 +20,6 @@ import hashlib
 import json
 import logging
 import re
-import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -38,6 +37,20 @@ from app.integrations.enterprise import (
     ensure_employee_copilot_demo_personas,
     map_enterprise_role_to_role_type,
 )
+from app.integrations.pg import (
+    PostgresIAMAdapter,
+    PostgresSSOAdapter,
+)
+
+
+def _employee_iam_adapter(fail_for=None):
+    return PostgresIAMAdapter(fail_for=fail_for) if settings.DATABASE_URL else SQLiteIAMAdapter(fail_for=fail_for)
+
+
+def _employee_sso_adapter(fail_for=None):
+    return PostgresSSOAdapter(fail_for=fail_for) if settings.DATABASE_URL else SQLiteSSOAdapter(fail_for=fail_for)
+
+
 from app.integrations.errors import ContextError, UpstreamTimeoutError, UpstreamUnavailableError
 from app.knowledge.legal_service import LegalKnowledgeService
 from app.knowledge.credit_service import CreditKnowledgeService
@@ -220,8 +233,8 @@ def require_verified_identity(
     fail_for = {"IAM_ERROR"}
     try:
         employee = EmployeeContextService(
-            SQLiteSSOAdapter(fail_for=fail_for),
-            SQLiteIAMAdapter(fail_for=fail_for),
+            _employee_sso_adapter(fail_for=fail_for),
+            _employee_iam_adapter(fail_for=fail_for),
         ).get(raw_credential, correlation_id=correlation_id)
     except UpstreamUnavailableError:
         metrics.increment("security.authorization_denied")
@@ -335,11 +348,11 @@ def get_my_context(identity: VerifiedIdentity = Depends(require_verified_identit
         cursor.execute("SELECT case_id FROM cases WHERE employee_id = ? ORDER BY updated_at DESC LIMIT 1", (emp_id,))
         case_row = cursor.fetchone()
         if case_row:
-            work_ctx.active_case_id = case_row[0]
+            work_ctx.active_case_id = case_row["case_id"]
         cursor.execute("SELECT item_id FROM employee_work_items WHERE employee_id = ? AND status != 'completed'", (emp_id,))
-        work_ctx.pending_task_ids = [r[0] for r in cursor.fetchall()]
-        cursor.execute("SELECT case_id FROM cases WHERE json_extract(state_json, '$.status') = 'blocked'")
-        work_ctx.blocked_case_ids = [r[0] for r in cursor.fetchall()]
+        work_ctx.pending_task_ids = [r["item_id"] for r in cursor.fetchall()]
+        cursor.execute("SELECT case_id FROM cases WHERE state_json->>'status' = 'blocked'")
+        work_ctx.blocked_case_ids = [r["case_id"] for r in cursor.fetchall()]
         # Which specialist subtype(s) this employee's own pending_review
         # cases are actually waiting on -- derived from the SAME
         # risk_gate_result.required_reviewer_roles the specialist-reviews
@@ -347,15 +360,13 @@ def get_my_context(identity: VerifiedIdentity = Depends(require_verified_identit
         # not a hardcoded "always legal_specialist" guess (see
         # docs/EMPLOYEE_ROLE_DESIGN_EVALUATION_REPORT.md §9).
         cursor.execute(
-            "SELECT state_json FROM cases WHERE employee_id = ? AND json_extract(state_json, '$.status') = 'pending_review'",
+            "SELECT state_json FROM cases WHERE employee_id = ? AND state_json->>'status' = 'pending_review'",
             (emp_id,),
         )
         waiting_roles: set[str] = set()
         for r in cursor.fetchall():
-            try:
-                risk_result = json.loads(r[0]).get("risk_gate_result") or {}
-            except (TypeError, ValueError):
-                risk_result = {}
+            state = r["state_json"]  # JSONB -> already a dict
+            risk_result = (state.get("risk_gate_result") if isinstance(state, dict) else {}) or {}
             waiting_roles.update(risk_result.get("required_reviewer_roles") or ["legal_specialist"])
         work_ctx.waiting_for_roles = sorted(waiting_roles)
         conn.close()
@@ -560,19 +571,21 @@ def get_team_workload(identity: VerifiedIdentity = Depends(require_verified_iden
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT COUNT(*) FROM cases WHERE json_extract(state_json, '$.status') = 'blocked'")
-        blocked_count = cursor.fetchone()[0]
-    except sqlite3.OperationalError:
+        cursor.execute("SELECT COUNT(*) AS n FROM cases WHERE state_json->>'status' = 'blocked'")
+        blocked_count = cursor.fetchone()["n"]
+    except Exception:
         # `cases` belongs to V2Repository's schema, not this module's --
-        # tolerate it not existing yet (e.g. a fresh DB the sales-case
-        # workflow hasn't touched) rather than 500ing the whole dashboard.
+        # tolerate any query issue rather than 500ing the whole dashboard.
+        # A failed statement aborts the PostgreSQL transaction, so roll back
+        # before issuing the remaining queries on this connection.
+        conn.rollback()
         blocked_count = 0
-    cursor.execute("SELECT COUNT(*) FROM employee_work_items WHERE status != 'completed' AND urgency >= 0.8")
-    sla_breaches = cursor.fetchone()[0]
-    cursor.execute("SELECT feedback, COUNT(*) FROM employee_recommendation_feedback GROUP BY feedback")
-    utilization = {r[0]: r[1] for r in cursor.fetchall()}
-    cursor.execute("SELECT COUNT(DISTINCT employee_id) FROM employees")
-    cohort_size = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) AS n FROM employee_work_items WHERE status != 'completed' AND urgency >= 0.8")
+    sla_breaches = cursor.fetchone()["n"]
+    cursor.execute("SELECT feedback, COUNT(*) AS c FROM employee_recommendation_feedback GROUP BY feedback")
+    utilization = {r["feedback"]: r["c"] for r in cursor.fetchall()}
+    cursor.execute("SELECT COUNT(DISTINCT employee_id) AS n FROM employee_personas")
+    cohort_size = cursor.fetchone()["n"]
     conn.close()
 
     return {

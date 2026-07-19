@@ -9,15 +9,72 @@ from __future__ import annotations
 
 import sqlite3
 import json
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Dict, List, Set
 from app.reliability.capability_registry import has_capability
 from app.schemas.v2.employee import NextBestWorkItem, RoleType
 
+# SHB public product catalog (real). Utility/bill-pay is not listed → mock fallback.
+_SHB_PRODUCTS = Path(__file__).resolve().parents[2] / "data" / "synthetic" / "v2" / "products_shb.json"
+_MOCK_UTILITY = "Thanh toán hóa đơn điện / tiện ích doanh nghiệp (mock)"
 
-def get_task_status_in_db(cursor: sqlite3.Cursor, item_id: str) -> str:
+
+@lru_cache(maxsize=1)
+def _shb_product_names() -> Dict[str, str]:
+    try:
+        products = json.loads(_SHB_PRODUCTS.read_text(encoding="utf-8")).get("products", [])
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {
+        p["product_id"]: (p.get("name") or p.get("product_name") or p["product_id"])
+        for p in products
+        if p.get("active", True) and p.get("product_id")
+    }
+
+
+def agent_service_suggestions(title: str) -> List[str]:
+    """Map task title → bank services RM can fill into the case suggestion.
+
+    Prefer real SHB catalog names; add mock utility bill-pay when title hints
+    at electricity/utilities (not in catalog yet).
+    """
+    names = _shb_product_names()
+    text = title.lower()
+    picked: List[str] = []
+
+    def add(product_id: str) -> None:
+        label = names.get(product_id)
+        if label and label not in picked:
+            picked.append(label)
+
+    if any(k in text for k in ("chi lương", "payroll", "lương")):
+        add("SHB-CORP-PAY-003")
+    if any(k in text for k in ("cash", "dòng tiền", "cash management")):
+        add("SHB-CORP-CASH-005")
+    if any(k in text for k in ("vốn", "tín dụng", "vay", "thấu chi")):
+        add("SHB-CORP-CREDIT-008")
+    if any(k in text for k in ("thuế", "hải quan", "tax")):
+        add("SHB-CORP-TAX-006")
+    if any(k in text for k in ("nhập khẩu", "xuất khẩu", "l/c", "thương mại")):
+        add("SHB-CORP-TFI-010")
+    if any(k in text for k in ("điện", "tiện ích", "hóa đơn", "utility")):
+        if _MOCK_UTILITY not in picked:
+            picked.append(_MOCK_UTILITY)
+
+    # Default cross-sell package when title has no product cue (e.g. "Task RM 1")
+    if not picked:
+        add("SHB-CORP-PAY-003")
+        add("SHB-CORP-CASH-005")
+        add("SHB-CORP-CREDIT-008")
+        picked.append(_MOCK_UTILITY)
+    return picked[:4]
+
+
+def get_task_status_in_db(cursor: Any, item_id: str) -> str:
     cursor.execute("SELECT status FROM employee_work_items WHERE item_id = ?", (item_id,))
     row = cursor.fetchone()
-    return row[0] if row else "unknown"
+    return row["status"] if row else "unknown"
 
 
 def get_next_best_work(
@@ -151,6 +208,7 @@ def get_next_best_work(
         ranked_items.append({
             "item_id": item["item_id"],
             "title": item["title"],
+            "customer_id": item["customer_id"],
             "priority_score": priority_score,
             "priority": "high" if band <= 1 else ("medium" if band == 2 else "low"),
             "band": band,
@@ -158,6 +216,7 @@ def get_next_best_work(
             "reasons": reasons,
             "excluded_actions": ex_actions,
             "recommended_action": rec_action,
+            "agent_suggestions": agent_service_suggestions(item["title"]),
             # For tie-break
             "urgency_val": item["urgency"],
             "created_at": item["created_at"],
@@ -186,11 +245,13 @@ def get_next_best_work(
         results.append(NextBestWorkItem(
             work_item_id=item["item_id"],
             title=item["title"],
+            customer_id=item["customer_id"],
             priority_score=item["priority_score"],
             priority=item["priority"],
             reasons=item["reasons"],
             excluded_actions=item["excluded_actions"],
-            recommended_action=item["recommended_action"]
+            recommended_action=item["recommended_action"],
+            agent_suggestions=item["agent_suggestions"],
         ))
     return results
 

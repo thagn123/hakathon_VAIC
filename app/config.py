@@ -87,7 +87,12 @@ class Settings(BaseModel):
     DEMO_LOGIN_PASSWORD: str = os.getenv("DEMO_LOGIN_PASSWORD", "demo1234")
     AUTH_SECRET: str = os.getenv("AUTH_SECRET", os.getenv("APPROVAL_SECRET", "demo-only-change-me"))
     AUTH_TOKEN_TTL_SECONDS: int = int(os.getenv("AUTH_TOKEN_TTL_SECONDS", str(8 * 60 * 60)))
-    
+
+    # Enterprise data backend. Empty => local SQLite mirrors (data/mock_database).
+    # Set DATABASE_URL to a postgresql:// DSN to use the PostgreSQL
+    # enterprise adapters (app/integrations/pg.py) for CRM/IAM/SSO.
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+
     # App Settings
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", 8000))

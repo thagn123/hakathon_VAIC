@@ -118,7 +118,7 @@ def populate():
                 
                 # Build permissions and scope
                 if sys_role in ("RM", "Manager"):
-                    perms = ["case:read", "case:write", "approval:request"]
+                    perms = ["case:read", "case:write", "approval:request", "credit:forward"]
                     scope = {
                         "managed_customer_ids": all_customers,
                         "branch": "HN01" if "Hanoi" in row.get("working_hours", "") else "HCM01"

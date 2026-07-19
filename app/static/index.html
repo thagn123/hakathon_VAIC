@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SHB Corporate Sales Copilot · E2E Demo</title>
+  <title>SHB Corporate Sales Copilot</title>
   <link rel="stylesheet" href="/static/app.css">
   <style>
     /* Styling extension for Copilot personalization features */
@@ -224,10 +224,15 @@
       gap: 20px;
       box-shadow: 0 14px 34px rgba(9,40,74,.2);
     }
-    .rm-command-hero h1 { margin: 2px 0 8px; font-size: 26px; }
+    .rm-command-hero h1 { margin: 2px 0 8px; font-size: 26px; color: #fff; }
     .rm-command-hero p { margin: 0; color: #d5e7f2; max-width: 760px; }
-    .rm-command-checks { display: grid; gap: 8px; align-content: center; }
-    .rm-command-checks span { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); border-radius: 9px; padding: 8px 10px; font-size: 11px; }
+    .hero-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+    .hero-flow span { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.22); border-radius: 9px; padding: 7px 10px; font-size: 11.5px; }
+    .hero-flow span.flow-active { background: #fff; color: #09284a; font-weight: 800; }
+    .hero-flow span.flow-reject { background: rgba(220,38,38,.18); border-color: rgba(248,113,113,.5); }
+    .hero-flow i { font-style: normal; opacity: .6; }
+    .hero-side { display: grid; gap: 8px; align-content: center; }
+    .hero-role { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); border-radius: 9px; padding: 8px 10px; font-size: 12px; font-weight: 800; }
     #rmWorkspace .case-summary { margin: 0 16px 12px; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
     #rmWorkspace .stepper { margin: 0 16px 14px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
     #rmWorkspace .workspace { grid-template-columns: 270px minmax(0, 1fr); max-width: none; margin: 0; }
@@ -254,8 +259,35 @@
     .customer-hero { background: linear-gradient(120deg,#09284a,#0d6b63); color:#fff; border-radius:16px; padding:24px; margin-bottom:16px; }
     .customer-hero p { color:#d5e7f2; margin-bottom:0; }
     .customer-grid { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(280px,.6fr); gap:16px; align-items:start; }
+    .customer-main { display:grid; gap:16px; }
     .customer-status { display:grid; gap:8px; }
     .customer-case-item { border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12px; }
+    .credit-request-card { border-top:4px solid var(--navy); }
+    .credit-picker select { width: min(420px, 100%); margin-top: 4px; }
+    .record-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; font-size: 12px; }
+    .record-flow span { padding: 5px 9px; border-radius: 8px; background: #eef2f4; color: #60707c; border: 1px solid var(--line); }
+    .record-flow span.done { background: #e8f5ef; color: #166534; border-color: #b7e0c8; }
+    .record-flow span.active { background: #09284a; color: #fff; border-color: #09284a; font-weight: 800; }
+    .record-flow span.reject { background: #fde8e8; color: #b91c1c; border-color: #f5b5b5; }
+    .record-flow i { font-style: normal; color: #9aa8b1; }
+    .credit-list-item { display:block; width:100%; text-align:left; cursor:pointer; background:transparent; border:0; padding:0; margin:0 0 10px; font:inherit; color:inherit; }
+    .credit-agent-on-form { margin:14px 0; }
+    .src-badge { font-size:11px; padding:2px 8px; border-radius:10px; font-weight:700; margin-left:6px; }
+    .src-badge.src-llm { background:#dcfce7; color:#166534; }
+    .src-badge.src-rule { background:#e2e8f0; color:#475569; }
+    .credit-section { border:1px solid var(--line); border-radius:10px; padding:14px; margin:0 0 12px; background:#f8fafc; }
+    .credit-section legend { color:var(--navy); font-size:13px; font-weight:800; padding:0 7px; }
+    .request-type-row { display:flex; flex-wrap:wrap; gap:18px; margin:4px 0 14px; font-size:13px; }
+    .credit-submit { width:100%; justify-content:center; }
+    .credit-result { margin-top:14px; border-radius:10px; padding:14px; background:var(--sky); border:1px solid #b8d7eb; }
+    .credit-approval-item { border:1px solid var(--line); border-left:4px solid var(--blue); border-radius:10px; padding:14px; margin-bottom:12px; }
+    .credit-approval-actions { display:grid; grid-template-columns:1fr auto auto auto; gap:8px; margin-top:12px; }
+    .credit-approval-actions textarea { min-height:42px; resize:vertical; }
+    .ai-copilot-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; padding:10px 12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:10px; }
+    .ai-copilot-bar small { display:block; color:#475569; margin-top:2px; }
+    .agent-result-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+    .agent-result { padding:12px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+    .agent-result ul { margin:8px 0 0; padding-left:18px; }
     @media (max-width: 1100px) {
       #rmWorkspace .workspace, #rmWorkspace .right-column, .customer-grid { grid-template-columns: 1fr; }
       #rmWorkspace .left-column, #rmWorkspace .main-column, #rmWorkspace .right-column { grid-column: 1; grid-row: auto; }
@@ -264,27 +296,46 @@
   </style>
 </head>
 <body>
-  <section id="loginScreen" style="position:fixed;inset:0;z-index:50;background:linear-gradient(135deg,#071d3b,#0d4771);display:flex;align-items:center;justify-content:center;padding:20px;">
-    <form id="loginForm" style="width:min(420px,100%);background:#fff;border-radius:16px;padding:32px;box-shadow:0 24px 80px rgba(0,0,0,.28);">
-      <div class="brand-mark" style="margin-bottom:16px;">S</div>
-      <h1 style="margin:0 0 8px;color:var(--navy);">Đăng nhập Workspace</h1>
-      <p class="muted" style="margin:0 0 22px;">Phiên demo dùng SSO/IAM giả lập để nhận diện role và quyền truy cập.</p>
-      <label>Employee ID
-        <select id="loginEmployee" style="width:100%;margin-top:6px;">
-          <option value="USER-MP-001">USER-MP-001 · Khách hàng Minh Phát</option>
-          <option value="RM-999">RM-999 · Relationship Manager</option>
-          <option value="SPEC-PROD-001">SPEC-PROD-001 · Product Specialist</option>
-          <option value="SPEC-CREDIT-001">SPEC-CREDIT-001 · Credit Specialist</option>
-          <option value="SPEC-INSURANCE-001">SPEC-INSURANCE-001 · Insurance Specialist</option>
-          <option value="MGR-HN-01">MGR-HN-01 · Sales Manager</option>
-        </select>
-      </label>
-      <label style="display:block;margin-top:14px;">Mật khẩu
-        <input id="loginPassword" type="password" value="demo1234" autocomplete="current-password" style="width:100%;margin-top:6px;">
-      </label>
-      <button class="button primary" type="submit" style="width:100%;margin-top:20px;">Đăng nhập</button>
-      <p id="loginError" class="muted" style="color:#b42318;min-height:18px;margin:12px 0 0;"></p>
-    </form>
+  <section id="loginScreen">
+    <div class="login-shell">
+      <aside class="login-brand">
+        <div class="login-brand-top">
+          <div class="brand-mark">S</div>
+          <h2>SHB Corporate<br>Sales Copilot</h2>
+          <p>Nền tảng multi-agent cho quy trình tín dụng doanh nghiệp: từ tiếp nhận nhu cầu đến phê duyệt cuối.</p>
+        </div>
+        <ul class="login-points">
+          <li><span>◆</span>Agent gợi ý sản phẩm &amp; thẩm định sơ bộ theo dữ liệu CRM</li>
+          <li><span>◆</span>Đối chiếu CIC / lịch sử tín dụng tự động</li>
+          <li><span>◆</span>Con người phê duyệt cuối · audit hash-chain đầy đủ</li>
+        </ul>
+        <small>Demo VAIC 2026 · dữ liệu mô phỏng, không dùng cho quyết định thật</small>
+      </aside>
+      <form id="loginForm" class="login-card" autocomplete="on">
+        <span class="eyebrow">Đăng nhập theo vai trò</span>
+        <h1>Đăng nhập Workspace</h1>
+        <p class="muted" style="margin:0 0 20px;">Mỗi vai trò chỉ thấy đúng hồ sơ và quyền hạn của mình.</p>
+        <label class="login-field">Vai trò
+          <select id="loginRole">
+            <option value="customer">Người dùng (Khách hàng)</option>
+            <option value="staff">Nhân viên ngân hàng</option>
+            <option value="manager">Người phê duyệt cuối (Manager)</option>
+          </select>
+        </label>
+        <label id="loginStaffWrap" class="login-field" style="display:none;">Chọn nhân viên
+          <select id="loginStaff">
+            <option value="RM-999">RM-999 · Nhân viên giao dịch</option>
+            <option value="SPEC-CREDIT-001">SPEC-CREDIT-001 · Chuyên viên thẩm định</option>
+          </select>
+        </label>
+        <small id="loginRoleHint" class="login-role-hint"></small>
+        <label class="login-field">Mật khẩu
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••">
+        </label>
+        <button class="button primary login-submit" type="submit">Đăng nhập →</button>
+        <p id="loginError" class="login-error"></p>
+      </form>
+    </div>
   </section>
   <header class="topbar">
     <div class="brand">
@@ -294,14 +345,10 @@
     <div class="top-context">
       <label>Identity đã xác thực
         <select id="employee" disabled>
-          <option value="USER-MP-001">USER-MP-001 (Customer User)</option>
-          <option value="RM-999">RM-999 (Relationship Manager)</option>
-          <option value="SPEC-PROD-001">SPEC-PROD-001 (Product Specialist)</option>
-          <option value="SPEC-CREDIT-001">SPEC-CREDIT-001 (Credit Specialist)</option>
-          <option value="SPEC-INSURANCE-001">SPEC-INSURANCE-001 (Insurance Specialist)</option>
-          <option value="MGR-HN-01">MGR-HN-01 (Sales Manager)</option>
-          <option value="EXPIRED_TOKEN">Simulate Expired Token (401)</option>
-          <option value="IAM_ERROR">Simulate IAM Service Outage (503)</option>
+          <option value="USER-MP-001">USER-MP-001 (Người dùng)</option>
+          <option value="RM-999">RM-999 (Nhân viên giao dịch)</option>
+          <option value="SPEC-CREDIT-001">SPEC-CREDIT-001 (Chuyên viên thẩm định)</option>
+          <option value="MGR-HN-01">MGR-HN-01 (Người phê duyệt cuối)</option>
         </select>
       </label>
       <label>Khách hàng 
@@ -310,7 +357,7 @@
           <option value="SESS-ABC">ABC Việt Nam · COMP-ABC</option>
         </select>
       </label>
-      <span class="demo-badge">DỮ LIỆU GIẢ LẬP</span>
+      <span class="demo-badge">RM PHÊ DUYỆT BẮT BUỘC</span>
       <span id="roleBadge" class="demo-badge">Chưa đăng nhập</span>
       <button id="logoutButton" class="button ghost" type="button" style="padding:5px 9px;">Đăng xuất</button>
     </div>
@@ -318,8 +365,8 @@
 
   <div id="toast" class="toast hidden" role="status"></div>
 
-  <!-- PERSONALIZATION CONTROL BAR -->
-  <div class="mgr-dashboard" style="margin-bottom:0px; margin-top:15px;" id="personalizationPanel">
+  <!-- PERSONALIZATION CONTROL BAR — ẩn khỏi UI, giữ input cho JS đọc/ghi preference -->
+  <div class="mgr-dashboard" style="display:none;" id="personalizationPanel">
     <div class="personalization-settings">
       <div class="settings-group">
         <label>Cá nhân hóa thói quen:</label>
@@ -352,12 +399,7 @@
   <!-- HABITS PANEL — AI-learned habits display -->
   <div class="mgr-dashboard" style="margin-bottom:0; margin-top:0;" id="habitsPanelWrapper">
     <details style="background:var(--sky);border:1px solid var(--line);border-radius:8px;padding:8px 15px;margin-bottom:12px;font-size:12px;">
-      <summary style="cursor:pointer;font-weight:700;color:var(--navy);list-style:none;display:flex;align-items:center;gap:8px;">
-        🧠 Thói quen AI đã học &nbsp;<span class="chip" style="font-size:9px;background:var(--navy);color:#fff;padding:1px 5px;border-radius:3px;">Personalization</span>
-      </summary>
-      <div id="habitsPanel" style="margin-top:8px;max-height:200px;overflow-y:auto;">
-        <p class="muted" style="font-size:12px;">Đang tải thói quen...</p>
-      </div>
+    
     </details>
   </div>
 
@@ -367,14 +409,22 @@
     <section class="rm-command-hero">
       <div>
         <span class="eyebrow" style="color:#9fd8ff;">RM DECISION COCKPIT</span>
-        <h1>Một màn hình để hiểu khách hàng và chốt bước tiếp theo</h1>
-        <p>Ưu tiên kết luận có thể hành động. Chi tiết kỹ thuật, nguồn và AI log được giữ ở lớp kiểm tra phía dưới.</p>
+        <h1 style="font-size:20px;">Trạng thái luồng tờ trình tín dụng</h1>
+        <div id="heroFlow" class="hero-flow"><span>Đang tải trạng thái luồng...</span></div>
       </div>
-      <div class="rm-command-checks">
-        <span>① Khách hàng đã cung cấp gì?</span>
-        <span>② Ba chuyên gia kết luận gì?</span>
-        <span>③ RM cần làm gì ngay bây giờ?</span>
+      <div class="hero-side">
+        <span id="heroRole" class="hero-role">Role hiện tại: —</span>
       </div>
+    </section>
+    <section id="rmCreditForwardPanel" class="panel credit-request-card" style="margin:0 16px 14px;">
+      <div class="panel-title">
+        <div>
+          <span class="eyebrow">TỜ TRÌNH TÍN DỤNG</span>
+          <h2>Hồ sơ đang xử lý</h2>
+        </div>
+      </div>
+      <div id="rmCreditPicker" class="credit-picker"></div>
+      <div id="rmCreditFormView"><p class="muted">Chọn một tờ trình để mở form.</p></div>
     </section>
     <section class="case-summary" aria-label="Tóm tắt case">
       <div><span>Mã case</span><strong id="summaryCase">Chưa tạo</strong></div>
@@ -385,11 +435,9 @@
     </section>
 
     <nav id="stepper" class="stepper" aria-label="Tiến trình xử lý">
-      <button data-step="1" class="active"><i>1</i><span>Nhập nhu cầu<small>Tạo sales case</small></span></button>
-      <button data-step="2"><i>2</i><span>Nạp hồ sơ<small>File hồ sơ doanh nghiệp</small></span></button>
-      <button data-step="3"><i>3</i><span>AI đọc hồ sơ<small>Phân loại & trích xuất</small></span></button>
-      <button data-step="4"><i>4</i><span>RM xác nhận<small>Chốt context dùng chung</small></span></button>
-      <button data-step="5"><i>5</i><span>Phân tích & xử lý<small>Đề xuất → phê duyệt</small></span></button>
+      <button data-step="1" class="active"><i>1</i><span>Thông tin & gợi ý<small>Database → Product/Credit Agent</small></span></button>
+      <button data-step="2"><i>2</i><span>Xác minh hồ sơ<small>Nạp, đọc và RM xác nhận</small></span></button>
+      <button data-step="5"><i>3</i><span>Phân tích & duyệt<small>Đề xuất → phê duyệt</small></span></button>
     </nav>
 
     <main class="workspace">
@@ -408,78 +456,35 @@
           </div>
         </section>
 
-        <section class="panel">
-          <div class="panel-title"><div><span class="eyebrow">BẮT ĐẦU NHANH</span><h2>Case mẫu có hướng dẫn</h2></div></div>
-          <label class="field">Chọn tình huống
-            <select id="scenario">
-              <option value="payroll">Case 1 · Payroll đủ điều kiện sơ bộ</option>
-              <option value="mixed">Case 2 · Payroll + vốn lưu động thiếu hồ sơ</option>
-              <option value="clarify">Case 3 · Nhu cầu cần làm rõ</option>
-              <option value="unsafe">Case 4 · Yêu cầu không an toàn</option>
-            </select>
-          </label>
-          <div id="scenarioGuide" class="guide-box"></div>
-          <h3>Output kỳ vọng của case mẫu</h3>
-          <div id="expectedOutput" class="expected-output"><p>Bổ sung hồ sơ UBO và BCTC</p></div>
-        </section>
-
         <section class="panel compact">
-          <div class="panel-title"><div><span class="eyebrow">PERSISTENT STATE</span><h2>Hồ sơ đang xử lý</h2></div><button id="refreshCases" class="icon-button" title="Tải lại">↻</button></div>
+          <div class="panel-title"><div><span class="eyebrow">HỒ SƠ THỰC TẾ</span><h2>Hồ sơ đang xử lý</h2></div><button id="refreshCases" class="icon-button" title="Tải lại">↻</button></div>
           <div id="caseList" class="case-list"><p class="muted">Chưa có case.</p></div>
         </section>
       </aside>
 
       <section class="main-column">
-        <!-- CHATBOT PANEL -->
-        <section class="chat-container">
-          <div class="chat-header">
-            <h3>💬 SHB Copilot Specialist Orchestrator</h3>
-            <div class="chat-status"><span class="status-dot"></span><span>Copilot Online</span></div>
-          </div>
-          <div id="chatHistory" class="chat-history">
-            <div class="chat-bubble-wrapper">
-              <div class="chat-avatar">AI</div>
-              <div class="chat-bubble">
-                <p>Xin chào! Tôi là <b>SHB Copilot Coordinator</b>. Tôi sẽ hỗ trợ bạn thực thi toàn bộ luồng quy trình cấp sản phẩm doanh nghiệp.</p>
-                <p>Để bắt đầu nhanh, hãy click vào một gợi ý kịch bản hoặc bấm nút <b>Tạo Case Nháp</b> bên dưới:</p>
-                <div class="actions">
-                  <button class="button primary" onclick="startChatScenario('payroll')">Payroll Đủ Điều Kiện (Case 1)</button>
-                  <button class="button secondary" onclick="startChatScenario('mixed')">Vốn Lưu Động Thiếu Hồ Sơ (Case 2)</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div id="chatSuggestions" class="chat-suggestions">
-            <span class="suggestion-chip" onclick="chatAction('create')">1. Tạo Case Nháp</span>
-            <span class="suggestion-chip" onclick="chatAction('mock_files')">2. Nạp Hồ Sơ Mẫu</span>
-            <span class="suggestion-chip" onclick="chatAction('ocr')">3. Chạy Trích Xuất AI</span>
-            <span class="suggestion-chip" onclick="chatAction('attest')">4. RM Ký Xác Nhận</span>
-            <span class="suggestion-chip" onclick="chatAction('analyze')">5. Chạy Phân Tích E2E</span>
-            <span class="suggestion-chip" onclick="chatAction('sync')">6. Đồng Bộ Core CRM</span>
-          </div>
-          <div class="chat-input-area">
-            <textarea id="chatMsgInput" placeholder="Nhập yêu cầu cho Copilot (ví dụ: 'tạo case', 'chạy phân tích')..." rows="1"></textarea>
-            <button id="sendChatBtn" onclick="handleSendChat()">➔</button>
-          </div>
-        </section>
-
-        <details class="collapsible-form" id="collapsibleFormDetails">
-          <summary>🛠 Cấu hình hồ sơ chi tiết (Form nhập tay truyền thống)</summary>
-          <section id="intakePanel" class="panel" style="margin-top:10px;">
+        <section id="intakePanel" class="panel">
             <div class="panel-title">
-              <div><span class="eyebrow">ĐẦU VÀO ĐƯỢC KIỂM SOÁT</span><h1>Đầu vào</h1><p id="stageHint">Nhập mục tiêu kinh doanh và tạo hồ sơ nháp.</p></div>
+              <div><span class="eyebrow">HỒ SƠ DOANH NGHIỆP</span><h1>Tạo yêu cầu phân tích</h1><p id="stageHint">Nhập nhu cầu thật và tạo hồ sơ.</p></div>
               <span id="intakeBadge" class="status-pill neutral">DRAFT</span>
             </div>
 
             <div id="stageInput" class="stage">
+              <div class="ai-copilot-bar">
+                <div><b>Dữ liệu khách hàng từ database</b><small id="intakeAiStatus">Đang tải CRM context theo quyền truy cập...</small></div>
+              </div>
               <div class="form-grid">
-                <label class="field span-2">Doanh nghiệp<input id="companyName" value="Công ty Cổ phần Thiết bị Minh Phát"></label>
-                <label class="field">Mã số thuế<input id="taxCode" value="0109988665"></label>
-                <label class="field">Ngành<input id="industry" value="Phân phối thiết bị công nghiệp"></label>
-                <label class="field span-2">Nhu cầu khách hàng<textarea id="needText" rows="5"></textarea><small>Viết theo kết quả mong muốn; không cần chỉ định agent hay tool.</small></label>
+                <label class="field span-2">Doanh nghiệp<input id="companyName" autocomplete="organization" required></label>
+                <label class="field">Mã số thuế<input id="taxCode" required></label>
+                <label class="field">Ngành<input id="industry" required></label>
+                <label class="field span-2">Nhu cầu khách hàng<textarea id="needText" rows="5" placeholder="RM nhập nhu cầu thực tế của khách hàng"></textarea></label>
                 <label class="field span-2">Ghi chú của RM<textarea id="rmNote" rows="2" placeholder="Thông tin bổ sung từ cuộc trao đổi"></textarea></label>
               </div>
-              <div class="button-row"><button id="createCase" class="button primary">Tạo sales case →</button></div>
+              <div class="agent-result-grid">
+                <section class="agent-result"><b>Agent sản phẩm · Gợi ý cho RM</b><div id="productAdviceList"><p class="muted">Đang đối chiếu danh mục sản phẩm...</p></div></section>
+                <section class="agent-result"><b>Credit Agent · Xác minh tín dụng</b><div id="creditAssessment"><p class="muted">Đang kiểm tra dữ liệu tín dụng hiện có...</p></div></section>
+              </div>
+              <div class="button-row"><button id="createCase" class="button primary">Tạo hồ sơ →</button></div>
             </div>
 
             <div id="stageDocuments" class="stage hidden">
@@ -487,7 +492,7 @@
                 <input id="fileInput" type="file" multiple accept=".pdf,.docx,.xlsx,.txt,.md,.csv,.json">
                 <div class="drop-icon">⇧</div><h3>Kéo thả hồ sơ vào đây</h3>
                 <p>PDF, DOCX, XLSX, TXT, CSV, JSON · tối đa 10 MB/file</p>
-                <div class="button-row center"><button id="chooseFiles" class="button secondary" type="button">Chọn file tài liệu</button><button id="loadMockFiles" class="button ghost" type="button">Nạp bộ hồ sơ mẫu</button></div>
+                <div class="button-row center"><button id="chooseFiles" class="button secondary" type="button">Chọn file tài liệu</button></div>
               </div>
               <div id="pendingFiles" class="file-list"></div>
               <div id="uploadedFiles" class="file-list"></div>
@@ -515,8 +520,7 @@
               <div class="confirmation-card"><span>✓</span><div><h3>Context đã được RM xác nhận</h3><p>Snapshot đã khóa revision và hash. AI chỉ phân tích trên context này cùng nguồn đã kiểm tra.</p><code id="snapshotHash">—</code></div></div>
               <div class="button-row"><button id="runAnalysis" class="button primary">Chạy phân tích end-to-end →</button></div>
             </div>
-          </section>
-        </details>
+        </section>
 
         <section id="resultsPanel" class="hidden">
           <div class="section-heading"><span class="eyebrow">QUYẾT ĐỊNH CÓ GIẢI THÍCH</span><h1>Kết luận xử lý</h1><p>Đọc từ trái sang phải. Sản phẩm phù hợp không đồng nghĩa với đã đủ điều kiện.</p></div>
@@ -595,7 +599,8 @@
         <p>Dữ liệu bạn nhập được gắn nguồn CUSTOMER_INPUT. RM vẫn phải đối chiếu hồ sơ trước khi AI phân tích hoặc tạo bất kỳ tác vụ nào.</p>
       </section>
       <div class="customer-grid">
-        <main class="panel">
+        <main class="customer-main">
+          <section class="panel">
           <div class="panel-title"><div><span class="eyebrow">THÔNG TIN DOANH NGHIỆP</span><h2>Phiếu nhu cầu Minh Phát</h2><p>Điền đủ thông tin giúp RM không phải hỏi lại nhiều lần.</p></div></div>
           <div class="form-grid">
             <label class="field span-2">Tên doanh nghiệp<input id="customerCompanyName" value="Công ty Cổ phần Thiết bị Minh Phát"></label>
@@ -612,11 +617,75 @@
           <div class="button-row"><button id="customerSubmit" class="button primary">Gửi thông tin cho RM →</button></div>
           <section id="customerDocuments" class="hidden" style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px;">
             <h3>Hồ sơ đính kèm</h3>
-            <p class="muted">Có thể dùng bộ hồ sơ mẫu để chạy thử hoặc chọn file của bạn.</p>
+            <p class="muted">Chọn hồ sơ doanh nghiệp cần gửi cho RM đối chiếu.</p>
             <input id="customerFileInput" type="file" multiple accept=".pdf,.docx,.xlsx,.txt,.md,.csv,.json">
-            <div class="button-row"><button id="customerChooseFiles" class="button secondary" type="button">Chọn file</button><button id="customerLoadMock" class="button ghost" type="button">Nạp hồ sơ mẫu</button></div>
+            <div class="button-row"><button id="customerChooseFiles" class="button secondary" type="button">Chọn file</button></div>
             <div id="customerPendingFiles" class="file-list"></div>
             <div class="button-row"><button id="customerUpload" class="button primary" type="button">Tải hồ sơ và gửi RM kiểm tra →</button></div>
+          </section>
+          </section>
+
+          <section class="panel credit-request-card">
+            <div class="panel-title"><div><span class="eyebrow">YÊU CẦU TÍN DỤNG DOANH NGHIỆP</span><h2>Form yêu cầu tín dụng</h2><p>Khách hàng chỉ nhập và theo dõi trạng thái form; không xem phân tích nội bộ.</p></div></div>
+            <form id="creditRequestForm">
+              <fieldset class="credit-section">
+                <legend>1. Thông tin KYC</legend>
+                <div class="form-grid">
+                  <label class="field">Tên công ty<input id="creditCompanyName" value="Công ty Cổ phần Thiết bị Minh Phát" required></label>
+                  <label class="field">Mã số thuế<input id="creditTaxId" value="0109988665" required></label>
+                  <label class="field">Loại hình pháp lý<input id="creditLegalType" value="Công ty cổ phần" required></label>
+                  <label class="field">Người đại diện<input id="creditRepresentative" value="Ông Nguyễn Văn A (Tổng Giám đốc)" required></label>
+                </div>
+              </fieldset>
+              <fieldset class="credit-section">
+                <legend>2. Hoạt động kinh doanh</legend>
+                <div class="form-grid">
+                  <label class="field">Ngành nghề chính<input id="creditIndustry" value="Phân phối thiết bị công nghiệp (VSIC 4659)" required></label>
+                  <label class="field">Quy mô<input id="creditScale" value="500 nhân sự, hoạt động 8 năm" required></label>
+                </div>
+              </fieldset>
+              <fieldset class="credit-section">
+                <legend>3. Chỉ số tài chính (tỷ VND)</legend>
+                <div class="form-grid">
+                  <label class="field">Tổng tài sản<input id="creditAssets" type="number" min="0" step="0.01" value="150" required></label>
+                  <label class="field">Doanh thu thuần<input id="creditRevenue" type="number" min="0" step="0.01" value="500" required></label>
+                  <label class="field">Lợi nhuận sau thuế<input id="creditProfit" type="number" step="0.01" value="25" required></label>
+                  <label class="field">Tỷ số D/E<input id="creditDebtEquity" type="number" min="0" step="0.01" value="1.8" required></label>
+                </div>
+              </fieldset>
+              <fieldset class="credit-section">
+                <legend>4. CIC và rủi ro</legend>
+                <div class="form-grid">
+                  <label class="field">Phân loại nợ (CIC)<select id="creditCic"><option>Nhóm 1 (Nợ đủ tiêu chuẩn)</option><option>Nhóm 2</option><option>Nhóm 3-5</option></select></label>
+                  <label class="field">Dư nợ hiện tại (tỷ VND)<input id="creditCurrentDebt" type="number" min="0" step="0.01" value="40" required></label>
+                  <label class="field span-2">Tài sản đảm bảo<input id="creditCollateral" value="Nhà máy số 2" required></label>
+                  <label class="field">Giá trị tài sản đảm bảo (tỷ VND)<input id="creditCollateralValue" type="number" min="0" step="0.01" value="60" required></label>
+                </div>
+              </fieldset>
+              <fieldset class="credit-section">
+                <legend>5. Lịch sử giao dịch</legend>
+                <div class="form-grid">
+                  <label class="field">Số dư CASA bình quân (tỷ VND)<input id="creditCasa" type="number" min="0" step="0.01" value="5" required></label>
+                  <label class="field">Lịch sử trả nợ<select id="creditRepayment"><option>Hoàn hảo</option><option>Có chậm trả</option><option>Chưa có lịch sử</option></select></label>
+                </div>
+              </fieldset>
+              <fieldset class="credit-section">
+                <legend>6. Đề nghị vay</legend>
+                <div class="request-type-row">
+                  <label><input type="radio" name="creditRequestType" value="loan" checked> Khoản vay</label>
+                  <label><input type="radio" name="creditRequestType" value="service"> Dịch vụ khách hàng</label>
+                  <label><input type="radio" name="creditRequestType" value="both"> Cả hai</label>
+                </div>
+                <div class="form-grid">
+                  <label class="field">Số tiền mong muốn (VND)<input id="creditAmount" type="number" min="1" value="5000000000" required></label>
+                  <label class="field">Thời hạn (tháng)<input id="creditTerm" type="number" min="1" max="360" value="12"></label>
+                  <label class="field span-2">Mục đích sử dụng vốn<textarea id="creditPurpose" rows="3" required>Thanh toán tiền nhập khẩu lô hàng linh kiện điện tử phục vụ mùa cao điểm.</textarea></label>
+                </div>
+              </fieldset>
+              <div id="creditAgentOnForm" class="credit-agent-on-form hidden"></div>
+              <button id="creditSubmitBtn" class="button primary credit-submit" type="submit">Gửi form cho RM →</button>
+            </form>
+            <div id="creditSubmissionResult" class="hidden"></div>
           </section>
         </main>
         <aside class="customer-status">
@@ -629,6 +698,10 @@
           <section class="panel">
             <span class="eyebrow">HỒ SƠ ĐÃ GỬI</span>
             <div id="customerCaseList"><p class="muted">Chưa có hồ sơ.</p></div>
+          </section>
+          <section class="panel">
+            <span class="eyebrow">YÊU CẦU TÍN DỤNG</span>
+            <div id="creditRequestList"><p class="muted">Chưa có yêu cầu.</p></div>
           </section>
           <section class="notice warning"><b>Phân quyền an toàn:</b> Customer User không xem AI log, kết luận nội bộ, payload phê duyệt và không thể tạo CRM task.</section>
         </aside>
@@ -651,6 +724,18 @@
         <p class="muted">Chọn một nhiệm vụ từ danh sách hàng đợi để thẩm định.</p>
       </main>
     </div>
+
+    <section id="creditApprovalPanel" class="panel credit-request-card hidden" style="margin:0 24px 20px;">
+      <div class="panel-title">
+        <div>
+          <span class="eyebrow">TỜ TRÌNH TÍN DỤNG</span>
+          <h2>Thẩm định chuyên viên</h2>
+          <p>Xem form khách hàng và dịch vụ Agent gợi ý; chuyên viên nhập kết quả thẩm định, không phê duyệt cuối.</p>
+        </div>
+      </div>
+      <div id="csCreditPicker" class="credit-picker"></div>
+      <div id="csCreditFormView"><p class="muted">Chọn một tờ trình để mở form.</p></div>
+    </section>
 
     <div class="ak-shell">
       <section class="panel">
@@ -676,13 +761,17 @@
       <section class="panel">
         <div class="panel-title">
           <div>
-            <span class="eyebrow">AGENT ACTIVITY</span>
-            <h2>Agent của tôi đang làm gì</h2>
-            <p class="muted">Case trong phạm vi khách hàng của bạn mà Agent đã tạo kết quả, kèm bằng chứng và nhật ký AI gần nhất.</p>
+            <span class="eyebrow">LỊCH SỬ TỜ TRÌNH</span>
+            <h2>Tờ trình trong phạm vi của bạn</h2>
+            <p class="muted">Mỗi tờ trình đi qua 4 bước: khách gửi → Agent thẩm định → RM chuyển → quyết định cuối. Bấm một dòng để mở trên form phía trên.</p>
           </div>
         </div>
-        <div id="akActivitySummary" class="muted">Đang tải hoạt động Agent...</div>
-        <div id="akActivityCases" style="margin-top:8px;max-height:420px;overflow-y:auto;"></div>
+        <div class="credit-history-filters">
+          <button type="button" class="button ghost is-selected" data-filter="open" onclick="setCreditHistoryFilter('open')">Đang xử lý</button>
+          <button type="button" class="button ghost" data-filter="decided" onclick="setCreditHistoryFilter('decided')">Đã quyết định</button>
+          <button type="button" class="button ghost" data-filter="all" onclick="setCreditHistoryFilter('all')">Tất cả</button>
+        </div>
+        <div id="creditHistoryList" style="margin-top:8px;max-height:420px;overflow-y:auto;"><p class="muted">Đang tải lịch sử tờ trình...</p></div>
       </section>
     </div>
   </div>
@@ -717,10 +806,21 @@
         <div id="mgrUtilizationSummary" style="font-size:14px; margin-top:15px;"></div>
         <div class="cohort-warning"><b>⚠ Bảo vệ quyền riêng tư:</b> Biểu đồ chỉ hiển thị khi cohort đạt tối thiểu 5 thành viên để tránh đánh giá hiệu suất của riêng từng cá nhân.</div>
       </div>
+      <section class="panel credit-request-card" style="margin-top:18px;">
+        <div class="panel-title">
+          <div>
+            <span class="eyebrow">PHÊ DUYỆT CUỐI</span>
+            <h2>Manager quyết định giải ngân</h2>
+            <p>Xem thẩm định chuyên viên và khuyến nghị giải ngân của Agent trước khi quyết định.</p>
+          </div>
+        </div>
+        <div id="managerCreditPicker" class="credit-picker"></div>
+        <div id="managerCreditFormView"><p class="muted">Không có tờ trình chờ phê duyệt.</p></div>
+      </section>
     </div>
   </div>
 
-  <footer><b>Synthetic demo.</b> AI chỉ phân tích và soạn nháp. Tạo CRM/task/email luôn cần RM phê duyệt payload cụ thể.</footer>
+  <footer>AI phân tích và đề xuất trạng thái. Tạo CRM/task/email luôn cần RM xem payload và phê duyệt rõ ràng.</footer>
   <script src="/static/app.js" defer></script>
 </body>
 </html>

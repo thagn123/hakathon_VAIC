@@ -8,6 +8,7 @@ import 'features/queue/queue_screen.dart';
 import 'features/case_detail/case_detail_screen.dart';
 import 'features/approval/approval_screen.dart';
 import 'features/employee_workspace/employee_workspace_screen.dart';
+import 'features/credit_requests/credit_requests_screen.dart';
 import 'features/auth/login_screen.dart';
 
 void main() {
@@ -71,6 +72,11 @@ final GoRouter _router = GoRouter(
       path: '/employee-workspace',
       name: 'employee-workspace',
       builder: (context, state) => const EmployeeWorkspaceScreen(),
+    ),
+    GoRoute(
+      path: '/credit-requests',
+      name: 'credit-requests',
+      builder: (context, state) => const CreditRequestsScreen(),
     ),
   ],
 );

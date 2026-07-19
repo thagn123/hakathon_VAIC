@@ -1,10 +1,9 @@
-"""Small deterministic SQLite migration registry for the local V2 profile."""
+"""Small deterministic migration registry for the V2 PostgreSQL state store."""
 
 from __future__ import annotations
 
-import sqlite3
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Any, Iterable
 
 
 @dataclass(frozen=True)
@@ -37,7 +36,7 @@ MIGRATIONS = (
                 customer_id TEXT,
                 status TEXT NOT NULL,
                 version INTEGER NOT NULL,
-                state_json TEXT NOT NULL,
+                state_json JSONB NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )""",
@@ -120,7 +119,7 @@ MIGRATIONS = (
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 
 
-def apply_migrations(connection: sqlite3.Connection) -> int:
+def apply_migrations(connection: Any) -> int:
     connection.execute(
         """CREATE TABLE IF NOT EXISTS schema_migrations (
             version INTEGER PRIMARY KEY,
@@ -128,7 +127,10 @@ def apply_migrations(connection: sqlite3.Connection) -> int:
             applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )"""
     )
-    applied = {int(row[0]) for row in connection.execute("SELECT version FROM schema_migrations")}
+    applied = {
+        int(row["version"])
+        for row in connection.execute("SELECT version FROM schema_migrations").fetchall()
+    }
     for migration in MIGRATIONS:
         if migration.version in applied:
             continue
@@ -138,5 +140,5 @@ def apply_migrations(connection: sqlite3.Connection) -> int:
             "INSERT INTO schema_migrations(version, name) VALUES (?, ?)",
             (migration.version, migration.name),
         )
-    row = connection.execute("SELECT COALESCE(MAX(version), 0) FROM schema_migrations").fetchone()
-    return int(row[0])
+    row = connection.execute("SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations").fetchone()
+    return int(row["v"])

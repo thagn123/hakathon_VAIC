@@ -1,16 +1,16 @@
-"""SQLite pilot-shaped repository with optimistic locking and hash-chained audit."""
+"""PostgreSQL-backed V2 repository with optimistic locking and hash-chained audit."""
 
 from __future__ import annotations
 
 import hashlib
 import json
-import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from threading import RLock
 from typing import Any, Dict, List, Optional
 
+from app.storage import pg
+from app.storage.pg import Json
 from app.schemas.v2.intake import CustomerBusinessSnapshot, ExtractedField, FieldConflict, IntakeDocument, IntakeSession
 from app.schemas.v2.metadata import (
     AccessControl,
@@ -22,14 +22,6 @@ from app.schemas.v2.metadata import (
 )
 from app.schemas.v2.shared_case_state import SharedCaseState
 from app.storage.migrations import LATEST_SCHEMA_VERSION, apply_migrations
-
-
-class _ClosingConnection(sqlite3.Connection):
-    def __exit__(self, exc_type, exc_value, traceback):
-        try:
-            return super().__exit__(exc_type, exc_value, traceback)
-        finally:
-            self.close()
 
 
 class StateConflictError(RuntimeError):
@@ -53,32 +45,32 @@ def _canonical(value: Any) -> str:
 
 
 class V2Repository:
-    def __init__(self, db_path: str | Path) -> None:
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+    def __init__(self, db_path: str | None = None) -> None:
+        # db_path is accepted for backward compatibility with callers that
+        # still pass settings.V2_DB_PATH, but the backend is PostgreSQL now:
+        # the connection target comes from settings.DATABASE_URL (see
+        # app/storage/pg.py). The argument is otherwise ignored.
+        self.db_path = db_path
         self._lock = RLock()
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.db_path, timeout=10, factory=_ClosingConnection)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys=ON")
-        return connection
+    def _connect(self):
+        return pg.connect()
 
     def _initialize(self) -> None:
-        with self._connect() as connection:
-            connection.executescript(
+        with self._lock, self._connect() as connection:
+            connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS cases (
                     case_id TEXT PRIMARY KEY,
                     employee_id TEXT NOT NULL,
                     customer_id TEXT,
                     version INTEGER NOT NULL,
-                    state_json TEXT NOT NULL,
+                    state_json JSONB NOT NULL,
                     updated_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS audit_events (
-                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sequence BIGSERIAL PRIMARY KEY,
                     event_id TEXT UNIQUE NOT NULL,
                     case_id TEXT NOT NULL,
                     trace_id TEXT NOT NULL,
@@ -94,7 +86,7 @@ class V2Repository:
                     case_id TEXT NOT NULL,
                     approver_id TEXT NOT NULL,
                     payload_hash TEXT NOT NULL,
-                    expires_at INTEGER NOT NULL,
+                    expires_at BIGINT NOT NULL,
                     status TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS idempotency_records (
@@ -150,26 +142,26 @@ class V2Repository:
 
     def schema_version(self) -> int:
         with self._connect() as connection:
-            row = connection.execute("SELECT COALESCE(MAX(version), 0) FROM schema_migrations").fetchone()
-            return int(row[0])
+            row = connection.execute("SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations").fetchone()
+            return int(row["v"])
 
     def health(self) -> Dict[str, Any]:
         try:
             with self._connect() as connection:
-                quick_check = str(connection.execute("PRAGMA quick_check").fetchone()[0])
-                case_count = int(connection.execute("SELECT COUNT(*) FROM cases").fetchone()[0])
-            healthy = quick_check == "ok" and self.schema_version() == LATEST_SCHEMA_VERSION
+                connection.execute("SELECT 1")
+                case_count = int(connection.execute("SELECT COUNT(*) AS n FROM cases").fetchone()["n"])
+            healthy = self.schema_version() == LATEST_SCHEMA_VERSION
             return {
                 "healthy": healthy,
-                "quick_check": quick_check,
+                "quick_check": "ok",
                 "schema_version": self.schema_version(),
                 "latest_schema_version": LATEST_SCHEMA_VERSION,
                 "case_count": case_count,
             }
-        except sqlite3.Error as exc:
+        except Exception as exc:
             return {
                 "healthy": False,
-                "error_code": "SQLITE_HEALTH_CHECK_FAILED",
+                "error_code": "POSTGRES_HEALTH_CHECK_FAILED",
                 "error_type": type(exc).__name__,
             }
 
@@ -186,7 +178,7 @@ class V2Repository:
                 version = 1
                 connection.execute(
                     "INSERT INTO cases VALUES (?, ?, ?, ?, ?, ?)",
-                    (state.case_id, employee_id, customer_id, version, state.model_dump_json(), now.isoformat()),
+                    (state.case_id, employee_id, customer_id, version, Json(state.model_dump(mode="json")), now.isoformat()),
                 )
             else:
                 current_version = int(current["version"])
@@ -195,7 +187,7 @@ class V2Repository:
                 version = current_version + 1
                 connection.execute(
                     "UPDATE cases SET employee_id=?, customer_id=?, version=?, state_json=?, updated_at=? WHERE case_id=?",
-                    (employee_id, customer_id, version, state.model_dump_json(), now.isoformat(), state.case_id),
+                    (employee_id, customer_id, version, Json(state.model_dump(mode="json")), now.isoformat(), state.case_id),
                 )
         return StoredCase(state=state, version=version)
 
@@ -204,7 +196,7 @@ class V2Repository:
             row = connection.execute("SELECT state_json, version FROM cases WHERE case_id=?", (case_id,)).fetchone()
         if row is None:
             return None
-        return StoredCase(state=SharedCaseState.model_validate_json(row["state_json"]), version=int(row["version"]))
+        return StoredCase(state=SharedCaseState.model_validate(row["state_json"]), version=int(row["version"]))
 
     def list_cases(self, employee_id: str) -> List[StoredCase]:
         with self._connect() as connection:
@@ -212,7 +204,7 @@ class V2Repository:
                 "SELECT state_json, version FROM cases WHERE employee_id=? ORDER BY updated_at DESC",
                 (employee_id,),
             ).fetchall()
-        return [StoredCase(SharedCaseState.model_validate_json(row["state_json"]), int(row["version"])) for row in rows]
+        return [StoredCase(SharedCaseState.model_validate(row["state_json"]), int(row["version"])) for row in rows]
 
     def list_cases_for_customers(self, customer_ids: List[str]) -> List[StoredCase]:
         """Cases belonging to any customer in customer_ids, regardless of
@@ -229,7 +221,7 @@ class V2Repository:
                 f"SELECT state_json, version FROM cases WHERE customer_id IN ({placeholders}) ORDER BY updated_at DESC",
                 tuple(customer_ids),
             ).fetchall()
-        return [StoredCase(SharedCaseState.model_validate_json(row["state_json"]), int(row["version"])) for row in rows]
+        return [StoredCase(SharedCaseState.model_validate(row["state_json"]), int(row["version"])) for row in rows]
 
     def create_intake(self, session: IntakeSession) -> StoredIntake:
         with self._lock, self._connect() as connection:
@@ -244,7 +236,7 @@ class V2Repository:
                     session.customer_id,
                     session.status.value,
                     1,
-                    session.model_dump_json(),
+                    Json(session.model_dump(mode="json")),
                     session.created_at.isoformat(),
                     session.updated_at.isoformat(),
                 ),
@@ -274,7 +266,7 @@ class V2Repository:
                     session.customer_id,
                     session.status.value,
                     version,
-                    session.model_dump_json(),
+                    Json(session.model_dump(mode="json")),
                     now.isoformat(),
                     session.intake_id,
                 ),
@@ -289,7 +281,7 @@ class V2Repository:
             ).fetchone()
         if row is None:
             return None
-        session = IntakeSession.model_validate_json(row["state_json"])
+        session = IntakeSession.model_validate(row["state_json"])
         session.version = int(row["version"])
         return StoredIntake(session=session, version=int(row["version"]))
 
@@ -301,7 +293,7 @@ class V2Repository:
             ).fetchall()
         result: List[StoredIntake] = []
         for row in rows:
-            session = IntakeSession.model_validate_json(row["state_json"])
+            session = IntakeSession.model_validate(row["state_json"])
             session.version = int(row["version"])
             result.append(StoredIntake(session=session, version=int(row["version"])))
         return result
@@ -324,7 +316,7 @@ class V2Repository:
             ).fetchall()
         result: List[StoredIntake] = []
         for row in rows:
-            session = IntakeSession.model_validate_json(row["state_json"])
+            session = IntakeSession.model_validate(row["state_json"])
             session.version = int(row["version"])
             result.append(StoredIntake(session=session, version=int(row["version"])))
         return result
@@ -574,7 +566,8 @@ class V2Repository:
     def save_idempotent_result(self, key: str, action: str, payload_hash: str, result: Dict[str, Any]) -> Dict[str, Any]:
         with self._lock, self._connect() as connection:
             connection.execute(
-                "INSERT OR IGNORE INTO idempotency_records VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO idempotency_records VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT (idempotency_key) DO NOTHING",
                 (key, action, payload_hash, _canonical(result), datetime.now(timezone.utc).isoformat()),
             )
             row = connection.execute("SELECT result_json FROM idempotency_records WHERE idempotency_key=?", (key,)).fetchone()

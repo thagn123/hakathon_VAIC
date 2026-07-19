@@ -18,7 +18,7 @@ def test_workspace_exposes_a_clear_decision_reading_order():
     for label in (
         "Tóm tắt case",
         "Tiến trình xử lý",
-        "Đầu vào",
+        "Tạo yêu cầu phân tích",
         "Kết luận xử lý",
         "AI hiểu khách hàng cần gì?",
         "Sản phẩm nào phù hợp?",
@@ -30,15 +30,9 @@ def test_workspace_exposes_a_clear_decision_reading_order():
         assert label in html
 
 
-def test_workspace_contains_four_guided_cases_and_expected_outputs():
+def test_workspace_uses_real_input_and_explicit_rm_approval():
     html = TestClient(app).get("/").text
-    for label in (
-        "Case 1 · Payroll đủ điều kiện sơ bộ",
-        "Case 2 · Payroll + vốn lưu động thiếu hồ sơ",
-        "Case 3 · Nhu cầu cần làm rõ",
-        "Case 4 · Yêu cầu không an toàn",
-        "Output kỳ vọng của case mẫu",
-        "Bổ sung hồ sơ UBO và BCTC",
-        "RM phê duyệt payload cụ thể",
-    ):
+    for label in ("Nhập nhu cầu thật", "Chọn file tài liệu", "RM PHÊ DUYỆT BẮT BUỘC"):
         assert label in html
+    assert "Case mẫu có hướng dẫn" not in html
+    assert "Nạp bộ hồ sơ mẫu" not in html

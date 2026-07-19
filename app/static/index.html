@@ -318,15 +318,12 @@
         <label class="login-field">Vai trò
           <select id="loginRole">
             <option value="customer">Người dùng (Khách hàng)</option>
-            <option value="staff">Nhân viên ngân hàng</option>
-            <option value="manager">Người phê duyệt cuối (Manager)</option>
+            <option value="staff">Nhân viên ngân hàng · Tạo hồ sơ &amp; thẩm định</option>
+            <option value="manager">Người phê duyệt cuối · Giải ngân &amp; xuất tờ trình</option>
           </select>
         </label>
-        <label id="loginStaffWrap" class="login-field" style="display:none;">Chọn nhân viên
-          <select id="loginStaff">
-            <option value="RM-999">RM-999 · Nhân viên giao dịch</option>
-            <option value="SPEC-CREDIT-001">SPEC-CREDIT-001 · Chuyên viên thẩm định</option>
-          </select>
+        <label id="loginCustomerWrap" class="login-field">Chọn người dùng (theo doanh nghiệp)
+          <select id="loginCustomerUser"></select>
         </label>
         <small id="loginRoleHint" class="login-role-hint"></small>
         <label class="login-field">Mật khẩu
@@ -345,8 +342,10 @@
     <div class="top-context">
       <label>Identity đã xác thực
         <select id="employee" disabled>
-          <option value="USER-MP-001">USER-MP-001 (Người dùng)</option>
-          <option value="RM-999">RM-999 (Nhân viên giao dịch)</option>
+          <option value="USER-MP-001">USER-MP-001 (Người dùng · Minh Phát)</option>
+          <option value="USER-ABC-001">USER-ABC-001 (Người dùng · ABC Việt Nam)</option>
+          <option value="USER-XYZ-001">USER-XYZ-001 (Người dùng · XYZ)</option>
+          <option value="RM-999">RM-999 (Nhân viên ngân hàng)</option>
           <option value="SPEC-CREDIT-001">SPEC-CREDIT-001 (Chuyên viên thẩm định)</option>
           <option value="MGR-HN-01">MGR-HN-01 (Người phê duyệt cuối)</option>
         </select>
@@ -355,6 +354,7 @@
         <select id="session">
           <option value="SESS-MP">Minh Phát · COMP-MP</option>
           <option value="SESS-ABC">ABC Việt Nam · COMP-ABC</option>
+          <option value="SESS-XYZ">XYZ · COMP-XYZ</option>
         </select>
       </label>
       <span class="demo-badge">RM PHÊ DUYỆT BẮT BUỘC</span>
@@ -654,7 +654,8 @@
                 </div>
               </fieldset>
               <fieldset class="credit-section">
-                <legend>4. CIC và rủi ro</legend>
+                <legend>4. CIC và rủi ro <span class="src-badge src-llm">Ngân hàng ưu tiên</span></legend>
+                <p class="muted" style="margin:0 0 8px;font-size:12px;">CIC, lịch sử trả nợ và dư nợ do ngân hàng đối chiếu từ hệ thống nội bộ; thông tin bạn khai chỉ mang tính tham khảo.</p>
                 <div class="form-grid">
                   <label class="field">Phân loại nợ (CIC)<select id="creditCic"><option>Nhóm 1 (Nợ đủ tiêu chuẩn)</option><option>Nhóm 2</option><option>Nhóm 3-5</option></select></label>
                   <label class="field">Dư nợ hiện tại (tỷ VND)<input id="creditCurrentDebt" type="number" min="0" step="0.01" value="40" required></label>

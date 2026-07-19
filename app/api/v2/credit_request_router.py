@@ -229,8 +229,11 @@ def appraise_credit_request(
     idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=128),
     identity: VerifiedIdentity = Depends(require_verified_identity),
 ) -> Dict[str, Any]:
-    if identity.roles[0] != RoleType.CREDIT_SPECIALIST:
-        raise _error(status.HTTP_403_FORBIDDEN, "CREDIT_SPECIALIST_REQUIRED", "Chỉ Credit Specialist được thẩm định.")
+    # Bank staff is one merged persona in the demo: the RM who re-creates and
+    # forwards the customer file is also the appraiser. Manager keeps the
+    # final approval alone.
+    if identity.roles[0] not in {RoleType.CREDIT_SPECIALIST, RoleType.RM}:
+        raise _error(status.HTTP_403_FORBIDDEN, "CREDIT_SPECIALIST_REQUIRED", "Chỉ nhân viên ngân hàng (thẩm định) được thẩm định.")
     require_capability(identity, "credit:appraise")
     current = _repo.get(request_id)
     if not current:

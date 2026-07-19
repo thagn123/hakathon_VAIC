@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import sqlite3
 import uuid
-from typing import Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
@@ -50,3 +53,54 @@ def login(body: LoginRequest, x_session_id: Optional[str] = Header(None)) -> Log
         expires_in=token_ttl,
         employee_id=identity["employee_id"],
     )
+
+
+@router.get("/customer-users", response_model=List[Dict[str, Any]])
+def list_customer_users() -> List[Dict[str, Any]]:
+    """Public list for the login screen: customer-portal accounts and the
+    company (from `companies`) each one belongs to. Exposes only IDs and
+    company names — no permissions, no internal data."""
+    if settings.DATABASE_URL:
+        adapter = PostgresSSOAdapter()
+        with adapter._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT e.employee_id, p.access_scope
+                    FROM employees e JOIN permissions p USING (employee_id)
+                    WHERE lower(e.role) IN ('customer', 'customer_user')
+                    ORDER BY e.employee_id
+                    """
+                )
+                rows = cur.fetchall()
+                cur.execute("SELECT tax_id, company_name FROM companies")
+                names = dict(cur.fetchall())
+    else:
+        db_path = Path(__file__).resolve().parents[3] / "data" / "mock_database" / "enterprise_core.sqlite3"
+        conn = sqlite3.connect(db_path)
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT e.employee_id, p.access_scope
+                FROM employees e JOIN permissions p ON p.employee_id = e.employee_id
+                WHERE lower(e.role) IN ('customer', 'customer_user')
+                ORDER BY e.employee_id
+                """
+            )
+            rows = cur.fetchall()
+            names = {}
+        finally:
+            conn.close()
+
+    result: List[Dict[str, Any]] = []
+    for employee_id, access_scope in rows:
+        scope = access_scope if isinstance(access_scope, dict) else json.loads(access_scope)
+        customer_ids = scope.get("managed_customer_ids") or []
+        customer_id = customer_ids[0] if customer_ids else None
+        result.append({
+            "employee_id": employee_id,
+            "customer_id": customer_id,
+            "company_name": names.get(customer_id, customer_id or employee_id),
+        })
+    return result

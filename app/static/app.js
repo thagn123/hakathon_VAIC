@@ -364,6 +364,16 @@ async function loadEmployeeContext() {
       $("employee").value = empId;
     }
 
+    // Route by role FIRST so the correct workspace shows immediately;
+    // personalization/habits are cosmetic and can hydrate afterwards.
+    const role = data.authorization_context?.roles?.[0];
+    routeWorkspace(role);
+
+    const roleLabel = { customer_user:"Người dùng", relationship_manager:"Nhân viên giao dịch", legal_specialist:"Legal/Compliance Reviewer", product_specialist:"Product Specialist", credit_specialist:"Chuyên viên thẩm định", insurance_specialist:"Insurance Specialist", manager:"Người phê duyệt cuối" }[role] || role;
+    $("roleBadge").textContent = `Role: ${roleLabel}`;
+    if($("heroRole"))$("heroRole").textContent = `Role hiện tại: ${roleLabel} (${empId})`;
+    toast(`SSO <b>${esc(empId)}</b> · Role: <b>${esc(roleLabel)}</b>`);
+
     // Apply personalization from server
     const pCtx = data.personalization_context;
     if (pCtx) {
@@ -377,17 +387,8 @@ async function loadEmployeeContext() {
         $("prefEmailTemplate").value = pCtx.preferences.preferred_email_template;
     }
 
-    // Load habits (if panel exists)
-    await loadHabits();
-
-    // Route by role
-    const role = data.authorization_context?.roles?.[0];
-    routeWorkspace(role);
-
-    const roleLabel = { customer_user:"Người dùng", relationship_manager:"Nhân viên giao dịch", legal_specialist:"Legal/Compliance Reviewer", product_specialist:"Product Specialist", credit_specialist:"Chuyên viên thẩm định", insurance_specialist:"Insurance Specialist", manager:"Người phê duyệt cuối" }[role] || role;
-    $("roleBadge").textContent = `Role: ${roleLabel}`;
-    if($("heroRole"))$("heroRole").textContent = `Role hiện tại: ${roleLabel} (${empId})`;
-    toast(`SSO <b>${esc(empId)}</b> · Role: <b>${esc(roleLabel)}</b>`);
+    // Load habits in the background (if panel exists)
+    loadHabits();
   } catch (error) {
     hideAllWorkspaces();
     if (error.status === 401 || error.message.includes("401")) {
@@ -426,7 +427,8 @@ function routeWorkspace(role) {
   if (role === "customer_user") {
     $("customerWorkspace").classList.remove("hidden");
     $("workspaceTitle").textContent = "Cổng thông tin khách hàng · Chỉ nhập dữ liệu";
-    $("session").value = "SESS-MP";
+    // SESS-MP / SESS-ABC / SESS-XYZ follow the company of the logged-in user.
+    $("session").value = "SESS-" + loginCustomerId().replace("COMP-", "");
     $("session").disabled = true;
     loadCustomerCases();
     loadCustomerCreditRequests();
@@ -460,10 +462,10 @@ function routeWorkspace(role) {
 
 function resolveLoginEmployeeId() {
   const role = $("loginRole")?.value;
-  if (role === "customer") return "USER-MP-001";
-  if (role === "staff") return $("loginStaff").value;
+  if (role === "customer") return $("loginCustomerUser")?.value || "USER-MP-001";
+  if (role === "staff") return "RM-999"; // merged persona: intake + appraisal
   if (role === "manager") return "MGR-HN-01";
-  return $("loginEmployee")?.value || "RM-999";
+  return "RM-999";
 }
 
 async function login(event) {
@@ -471,6 +473,10 @@ async function login(event) {
   $("loginError").textContent = "";
   try {
     const employeeId = resolveLoginEmployeeId();
+    if ($("loginRole")?.value === "customer") {
+      const opt = $("loginCustomerUser")?.selectedOptions?.[0];
+      sessionStorage.setItem("shb_customer_id", opt?.dataset?.customerId || "COMP-MP");
+    }
     const response = await fetch("/api/v2/auth/login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({employee_id:employeeId, password:$("loginPassword").value})});
     const data = await response.json();
     if (!response.ok) throw new Error(data?.detail?.message || "Đăng nhập thất bại.");
@@ -478,11 +484,33 @@ async function login(event) {
     sessionStorage.setItem("shb_access_token", authToken);
     $("employee").value = data.employee_id;
     $("employee").disabled = true;
+    // Ẩn mọi workspace ngay lập tức: rmWorkspace là khối mặc định trong HTML,
+    // nếu không ẩn sẽ lộ UI RM trong lúc chờ context trả về.
+    hideAllWorkspaces();
     $("loginScreen").style.display = "none";
-    await loadCases();
+    // Route theo role trước (nhanh), case list tải nền sau.
     await loadEmployeeContext();
+    loadCases();
   } catch (error) {
     $("loginError").textContent = error.message;
+  }
+}
+
+function loginCustomerId() {
+  return sessionStorage.getItem("shb_customer_id") || "COMP-MP";
+}
+
+async function loadLoginCustomerUsers() {
+  const select = $("loginCustomerUser");
+  if (!select) return;
+  try {
+    const response = await fetch("/api/v2/auth/customer-users");
+    const users = await response.json();
+    select.innerHTML = users.map(u =>
+      `<option value="${esc(u.employee_id)}" data-customer-id="${esc(u.customer_id || "")}">${esc(u.company_name)} · ${esc(u.employee_id)}</option>`
+    ).join("");
+  } catch (error) {
+    select.innerHTML = '<option value="USER-MP-001" data-customer-id="COMP-MP">Công ty TNHH Minh Phát · USER-MP-001</option>';
   }
 }
 
@@ -547,7 +575,7 @@ async function loadCustomerCases(){
 
 function creditRequestPayload(){
   return {
-    customer_id:"COMP-MP",
+    customer_id:loginCustomerId(),
     company_name:$("creditCompanyName").value,
     tax_id:$("creditTaxId").value,
     legal_type:$("creditLegalType").value,
@@ -673,11 +701,12 @@ function creditReadonlyFieldsHtml(row){
 function creditStaffActionsHtml(row,role){
   if(role==="relationship_manager" && row.status==="WithRM"){
     return `<div class="credit-approval-actions">
-      <textarea id="creditSharedRmNote" placeholder="Ghi chú RM khi chuyển (tuỳ chọn)" aria-label="Ghi chú RM"></textarea>
-      <button class="button primary" type="button" onclick="forwardCreditRequest('${row.request_id}',this)">Bổ sung & chuyển chuyên viên thẩm định →</button>
+      <textarea id="creditSharedRmNote" placeholder="Ghi chú khi chuyển sang bước thẩm định (tuỳ chọn)" aria-label="Ghi chú"></textarea>
+      <button class="button primary" type="button" onclick="forwardCreditRequest('${row.request_id}',this)">Hoàn tất hồ sơ & chuyển sang thẩm định →</button>
     </div>`;
   }
-  if(role==="credit_specialist" && row.status==="PendingAppraisal"){
+  // Merged bank-staff persona: the same person forwards then appraises.
+  if((role==="credit_specialist"||role==="relationship_manager") && row.status==="PendingAppraisal"){
     return `<div class="credit-approval-actions">
       <textarea id="creditSharedAppraisalReason" placeholder="Nhận xét thẩm định của chuyên viên..." aria-label="Nhận xét thẩm định"></textarea>
       <button class="button primary" type="button" onclick="appraiseCreditRequest('${row.request_id}','recommend')">Đề nghị trình phê duyệt</button>
@@ -832,7 +861,7 @@ async function loadRmCreditForwardQueue(){
     const rows=realCreditRows(await api("/api/v2/credit-requests"));
     _creditRowsCache=rows;
     renderHero(rows);
-    const waiting=rows.filter(row=>row.status==="WithRM");
+    const waiting=rows.filter(row=>row.status==="WithRM"||row.status==="PendingAppraisal");
     const focus=waiting[0]||rows[0];
     picker.innerHTML=creditPickerHtml(rows,focus?.request_id,"openRmCreditForm");
     if(focus)renderCreditFormView(view,focus,"relationship_manager");
@@ -917,8 +946,10 @@ async function appraiseCreditRequest(requestId,recommendation){
       headers:{"Idempotency-Key":`credit-appraisal-${requestId}-${Date.now()}`},
       body:JSON.stringify({recommendation,reason})
     });
-    await loadCreditApprovalRequests();
-    toast("Đã lưu thẩm định; Agent đã tạo khuyến nghị giải ngân để Manager xem xét.");
+    // Reload whichever workspace the merged staff persona is looking at.
+    if(!$("rmWorkspace").classList.contains("hidden"))await loadRmCreditForwardQueue();
+    else await loadCreditApprovalRequests();
+    toast("Đã lưu thẩm định; Agent đã tạo khuyến nghị giải ngân để người phê duyệt cuối xem xét.");
   }catch(error){toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error")}
 }
 
@@ -1523,31 +1554,23 @@ $("logoutButton").onclick = logout;
 // Role hint under the login role picker
 const loginRoleHints = {
   customer: "Cổng khách hàng: gửi yêu cầu tín dụng, theo dõi tiến độ hồ sơ.",
-  staff: "Chọn nhân viên giao dịch hoặc chuyên viên thẩm định bên dưới.",
-  manager: "Manager: theo dõi workload đội, chỉ xem số liệu tổng hợp.",
-  "RM-999": "RM: tiếp nhận nhu cầu, chạy agent gợi ý và chuyển tờ trình phê duyệt.",
-  "SPEC-CREDIT-001": "Chuyên viên thẩm định: xem phân tích agent, ra quyết định tín dụng.",
+  staff: "Nhân viên ngân hàng: tạo lại hồ sơ cho khách và thẩm định tín dụng (1 người).",
+  manager: "Người phê duyệt cuối: chịu trách nhiệm giải ngân và xuất tờ trình.",
 };
-function syncLoginStaffVisibility() {
-  const isStaff = $("loginRole")?.value === "staff";
-  const wrap = $("loginStaffWrap");
-  if (wrap) wrap.style.display = isStaff ? "block" : "none";
+function syncLoginCustomerVisibility() {
+  const isCustomer = $("loginRole")?.value === "customer";
+  const wrap = $("loginCustomerWrap");
+  if (wrap) wrap.style.display = isCustomer ? "block" : "none";
 }
 function updateLoginRoleHint() {
   const hint = $("loginRoleHint");
-  if (!hint) return;
-  const role = $("loginRole")?.value;
-  if (role === "staff") {
-    hint.textContent = loginRoleHints[$("loginStaff")?.value] || loginRoleHints.staff;
-  } else {
-    hint.textContent = loginRoleHints[role] || "";
-  }
+  if (hint) hint.textContent = loginRoleHints[$("loginRole")?.value] || "";
 }
 if ($("loginRole")) {
-  $("loginRole").onchange = () => { syncLoginStaffVisibility(); updateLoginRoleHint(); };
-  if ($("loginStaff")) $("loginStaff").onchange = updateLoginRoleHint;
-  syncLoginStaffVisibility();
+  $("loginRole").onchange = () => { syncLoginCustomerVisibility(); updateLoginRoleHint(); };
+  syncLoginCustomerVisibility();
   updateLoginRoleHint();
+  loadLoginCustomerUsers();
 }
 
 // Bind Personalization preferences change
@@ -1559,9 +1582,11 @@ bindWorkspaceEvents();
 
 setStage(1);
 setIntakeStatus("draft");
+// rmWorkspace là khối hiển thị mặc định trong HTML — ẩn hết ngay khi boot
+// để không lộ UI nhân viên trước khi biết role thật từ /me/context.
+hideAllWorkspaces();
 if (authToken) {
   $("loginScreen").style.display = "none";
-  loadCases();
-  loadEmployeeContext();
+  loadEmployeeContext().then(() => loadCases());
 }
 

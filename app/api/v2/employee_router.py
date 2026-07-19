@@ -217,7 +217,7 @@ def require_verified_identity(
             raw_credential = token
             auth_source = "sso"
     elif x_employee_id:
-        if not settings.DEMO_AUTH_ENABLED:
+        if settings.REQUIRE_SESSION_TOKEN or not settings.DEMO_AUTH_ENABLED:
             _event_logger.emit("authentication_failed", reason="header_auth_disabled", correlation_id=correlation_id)
             raise _error(status.HTTP_401_UNAUTHORIZED, "UNAUTHENTICATED", "X-Employee-ID khong duoc chap nhan ngoai demo mode.")
         if x_employee_id == "EXPIRED_TOKEN":

@@ -83,6 +83,12 @@ class Settings(BaseModel):
     DEMO_AUTH_ENABLED: bool = os.getenv(
         "DEMO_AUTH_ENABLED", "true" if os.getenv("APP_ENV", "development") == "development" else "false"
     ).lower() == "true"
+    # When true, every /api/v2 data request must carry a valid session token
+    # (issued by /auth/login); a bare X-Employee-ID header is no longer trusted
+    # even in demo mode. Login itself still needs DEMO_AUTH_ENABLED, so this can
+    # be turned on without disabling the demo login flow. Default false keeps the
+    # header-only test suite working.
+    REQUIRE_SESSION_TOKEN: bool = os.getenv("REQUIRE_SESSION_TOKEN", "false").lower() == "true"
     # Local-only login boundary. Replace with enterprise SSO in pilot/production.
     DEMO_LOGIN_PASSWORD: str = os.getenv("DEMO_LOGIN_PASSWORD", "demo1234")
     AUTH_SECRET: str = os.getenv("AUTH_SECRET", os.getenv("APPROVAL_SECRET", "demo-only-change-me"))

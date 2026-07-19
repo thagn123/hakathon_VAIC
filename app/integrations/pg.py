@@ -166,8 +166,16 @@ EMPLOYEE_COPILOT_DEMO_PERSONAS: List[tuple[str, str, str, List[str], Dict[str, A
     ("USER-MP-001", "Customer", "Minh Phat Customer Portal",
      ["case:create", "case:read", "case:write"],
      {"managed_customer_ids": ["COMP-MP"], "branch": "CUSTOMER_PORTAL"}),
+    ("USER-ABC-001", "Customer", "ABC Viet Nam Customer Portal",
+     ["case:create", "case:read", "case:write"],
+     {"managed_customer_ids": ["COMP-ABC"], "branch": "CUSTOMER_PORTAL"}),
+    ("USER-XYZ-001", "Customer", "XYZ Customer Portal",
+     ["case:create", "case:read", "case:write"],
+     {"managed_customer_ids": ["COMP-XYZ"], "branch": "CUSTOMER_PORTAL"}),
+    # Merged bank-staff persona: RM re-creates the file and appraises it;
+    # Manager alone keeps credit:final_approve.
     ("RM-999", "RM", "Corporate Banking HN",
-     ["case:read", "case:write", "approval:request", "credit:forward"],
+     ["case:read", "case:write", "approval:request", "credit:forward", "credit:appraise"],
      {"managed_customer_ids": ["COMP-ABC", "COMP-MP", "COMP-XYZ"], "branch": "HN01"}),
     ("SPEC-LEGAL-001", "Specialist", "Legal & Compliance",
      ["case:read", "case:verify_evidence", "legal:check_issue", "legal:block_non_eligible",

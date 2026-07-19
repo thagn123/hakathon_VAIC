@@ -290,14 +290,12 @@ function renderNextAction(state){const copy=nextCopy(state.status);const questio
 function renderActionButtons(status){
   let html="";
   if(status==="pending_information")html='<button id="supplementDocs" class="button primary">Bổ sung hồ sơ còn thiếu</button>';
-  if(status==="pending_approval")html='<button id="previewApproval" class="button ghost">1. Xem payload sẽ tạo</button><button id="approveAction" class="button secondary">2. RM phê duyệt tạo case/task</button><button id="executeAction" class="button primary" disabled>3. Thực thi đồng bộ Core CRM</button>';
+  if(status==="pending_approval")html='<button id="approveAndExecute" class="button primary">Duyệt payload & thực thi CRM</button>';
   if(status==="clarification_required")html='<button id="editNeed" class="button primary">Sửa và tạo case mới</button>';
   if(status==="pending_review")html='<button id="rejectCase" class="button ghost" style="color:var(--danger)">Từ chối case này</button>';
   $("actionButtons").innerHTML=html;
   if($("supplementDocs"))$("supplementDocs").onclick=()=>{setStage(2);$("intakePanel").scrollIntoView({behavior:"smooth"})};
-  if($("previewApproval"))$("previewApproval").onclick=previewApproval;
-  if($("approveAction"))$("approveAction").onclick=approveAction;
-  if($("executeAction"))$("executeAction").onclick=executeAction;
+  if($("approveAndExecute"))$("approveAndExecute").onclick=approveAndExecute;
   if($("editNeed"))$("editNeed").onclick=()=>{setStage(1);$("intakePanel").scrollIntoView({behavior:"smooth"})};
   if($("rejectCase"))$("rejectCase").onclick=rejectCase;
 }
@@ -317,16 +315,20 @@ function renderAudit(events,valid){$("auditLog").innerHTML=`<div class="notice $
 function renderControlLogs(evidence,ai,audit){renderEvidence(evidence);renderAiLog(ai);renderAudit(audit,true)}
 async function loadControlLogs(){if(!ui.caseId||!ui.runtime)return;try{const [ai,audit]=await Promise.all([api(`/api/v2/sales-cases/${ui.caseId}/ai-log`),api(`/api/v2/sales-cases/${ui.caseId}/audit`)]);renderAiLog(ai.entries||[]);renderAudit(audit.events||[],audit.chain_valid)}catch(error){toast(`Không tải được log: ${esc(error.message)}`,"error")}}
 async function previewApproval(){try{const data=await api(`/api/v2/sales-cases/${ui.caseId}/approval-preview`,{method:"POST"});ui.previewHash=data.payload_hash;$("actionButtons").insertAdjacentHTML("beforeend",`<div class="approval-preview"><b>Payload hash</b><small>${esc(data.payload_hash)}</small><pre>${esc(JSON.stringify(data.payload,null,2))}</pre></div>`);toast("Đã hiển thị đúng payload được khóa cho approval.","warning")}catch(error){toast(esc(error.message),"error")}}
-async function approveAction(){
+async function approveAndExecute(){
+  const btn=$("approveAndExecute");
+  if(btn)btn.disabled=true;
   try{
     if(!ui.previewHash)await previewApproval();
     const data=await api(`/api/v2/sales-cases/${ui.caseId}/approve`,{method:"POST",body:JSON.stringify({expected_state_version:ui.stateVersion,payload_hash:ui.previewHash})});
     ui.approvalToken=data.approval_token;ui.stateVersion=data.state_version;
-    $("executeAction").disabled=false;$("approveAction").disabled=true;
     // Log accepted feedback for personalization learning
     await logPersonalizationFeedback("accepted");
-    toast("RM đã duyệt đúng payload hash. Token ngắn hạn không được ghi vào log.");
-  }catch(error){toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error")}
+    await executeAction();
+  }catch(error){
+    if(btn)btn.disabled=false;
+    toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error");
+  }
 }
 async function executeAction(){try{const data=await api(`/api/v2/sales-cases/${ui.caseId}/execute-actions`,{method:"POST",headers:{"X-Approval-Token":ui.approvalToken},body:JSON.stringify({idempotency_key:`${ui.caseId}:ui-execute-v1`,expected_state_version:ui.stateVersion})});ui.stateVersion=data.state_version;const latest=await api(`/api/v2/cases/${ui.caseId}`);ui.runtime=latest.case;renderRuntime(latest.case);await loadControlLogs();toast(`Đã tạo opportunity ${esc(data.result.opportunity_id)} và các task đồng bộ trên hệ thống CRM.`)}catch(error){toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error")}}
 async function loadCases(){
@@ -364,6 +366,16 @@ async function loadEmployeeContext() {
       $("employee").value = empId;
     }
 
+    // Route by role FIRST so the correct workspace shows immediately;
+    // personalization/habits are cosmetic and can hydrate afterwards.
+    const role = data.authorization_context?.roles?.[0];
+    routeWorkspace(role);
+
+    const roleLabel = { customer_user:"Người dùng", relationship_manager:"Nhân viên giao dịch", legal_specialist:"Legal/Compliance Reviewer", product_specialist:"Product Specialist", credit_specialist:"Chuyên viên thẩm định", insurance_specialist:"Insurance Specialist", manager:"Người phê duyệt cuối" }[role] || role;
+    $("roleBadge").textContent = `Role: ${roleLabel}`;
+    if($("heroRole"))$("heroRole").textContent = `Role hiện tại: ${roleLabel} (${empId})`;
+    toast(`SSO <b>${esc(empId)}</b> · Role: <b>${esc(roleLabel)}</b>`);
+
     // Apply personalization from server
     const pCtx = data.personalization_context;
     if (pCtx) {
@@ -377,17 +389,8 @@ async function loadEmployeeContext() {
         $("prefEmailTemplate").value = pCtx.preferences.preferred_email_template;
     }
 
-    // Load habits (if panel exists)
-    await loadHabits();
-
-    // Route by role
-    const role = data.authorization_context?.roles?.[0];
-    routeWorkspace(role);
-
-    const roleLabel = { customer_user:"Người dùng", relationship_manager:"Nhân viên giao dịch", legal_specialist:"Legal/Compliance Reviewer", product_specialist:"Product Specialist", credit_specialist:"Chuyên viên thẩm định", insurance_specialist:"Insurance Specialist", manager:"Người phê duyệt cuối" }[role] || role;
-    $("roleBadge").textContent = `Role: ${roleLabel}`;
-    if($("heroRole"))$("heroRole").textContent = `Role hiện tại: ${roleLabel} (${empId})`;
-    toast(`SSO <b>${esc(empId)}</b> · Role: <b>${esc(roleLabel)}</b>`);
+    // Load habits in the background (if panel exists)
+    loadHabits();
   } catch (error) {
     hideAllWorkspaces();
     if (error.status === 401 || error.message.includes("401")) {
@@ -426,8 +429,11 @@ function routeWorkspace(role) {
   if (role === "customer_user") {
     $("customerWorkspace").classList.remove("hidden");
     $("workspaceTitle").textContent = "Cổng thông tin khách hàng · Chỉ nhập dữ liệu";
-    $("session").value = "SESS-MP";
+    const customerId = loginCustomerId();
+    ensureCustomerSessionOption(customerId, sessionStorage.getItem("shb_company_name") || customerId);
+    $("session").value = "SESS-" + customerId.replace("COMP-", "");
     $("session").disabled = true;
+    loadCustomerProfile();
     loadCustomerCases();
     loadCustomerCreditRequests();
   } else if (role === "relationship_manager") {
@@ -460,10 +466,10 @@ function routeWorkspace(role) {
 
 function resolveLoginEmployeeId() {
   const role = $("loginRole")?.value;
-  if (role === "customer") return "USER-MP-001";
-  if (role === "staff") return $("loginStaff").value;
+  if (role === "customer") return $("loginCustomerUser")?.value || "USER-MP-001";
+  if (role === "staff") return "RM-999"; // merged persona: intake + appraisal
   if (role === "manager") return "MGR-HN-01";
-  return $("loginEmployee")?.value || "RM-999";
+  return "RM-999";
 }
 
 async function login(event) {
@@ -471,18 +477,131 @@ async function login(event) {
   $("loginError").textContent = "";
   try {
     const employeeId = resolveLoginEmployeeId();
+    if ($("loginRole")?.value === "customer") {
+      const opt = $("loginCustomerUser")?.selectedOptions?.[0];
+      sessionStorage.setItem("shb_customer_id", opt?.dataset?.customerId || "COMP-MP");
+      sessionStorage.setItem("shb_company_name", opt?.textContent?.split(" · ")[0] || "");
+    }
     const response = await fetch("/api/v2/auth/login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({employee_id:employeeId, password:$("loginPassword").value})});
     const data = await response.json();
     if (!response.ok) throw new Error(data?.detail?.message || "Đăng nhập thất bại.");
     authToken = data.access_token;
     sessionStorage.setItem("shb_access_token", authToken);
+    if (![...$("employee").options].some(option => option.value === data.employee_id)) {
+      $("employee").add(new Option(data.employee_id, data.employee_id));
+    }
     $("employee").value = data.employee_id;
     $("employee").disabled = true;
+    // Ẩn mọi workspace ngay lập tức: rmWorkspace là khối mặc định trong HTML,
+    // nếu không ẩn sẽ lộ UI RM trong lúc chờ context trả về.
+    hideAllWorkspaces();
     $("loginScreen").style.display = "none";
-    await loadCases();
+    // Route theo role trước (nhanh), case list tải nền sau.
     await loadEmployeeContext();
+    loadCases();
   } catch (error) {
     $("loginError").textContent = error.message;
+  }
+}
+
+function loginCustomerId() {
+  return sessionStorage.getItem("shb_customer_id") || "COMP-MP";
+}
+
+function ensureCustomerSessionOption(customerId, companyName) {
+  const value = "SESS-" + customerId.replace("COMP-", "");
+  if (![...$("session").options].some(option => option.value === value)) {
+    $("session").add(new Option(`${companyName} · ${customerId}`, value));
+  }
+}
+
+async function loadCustomerProfile() {
+  try {
+    const data = await api("/api/v2/context/current");
+    const attributes = data.context?.customer?.attributes || {};
+    const fields = {
+      customerCompanyName: attributes.company_name || attributes.name,
+      customerTaxCode: attributes.tax_code,
+      customerIndustry: attributes.industry,
+      customerContact: attributes.contact,
+      customerEmployees: attributes.employees_count,
+      customerRevenue: attributes.annual_revenue,
+      customerOperatingYears: attributes.operating_years,
+    };
+    Object.entries(fields).forEach(([id, value]) => {
+      $(id).value = value ?? "";
+    });
+    const companyName = attributes.company_name || attributes.name;
+    if (companyName) $("customerProfileTitle").textContent = `Phiếu nhu cầu ${companyName}`;
+  } catch (error) {
+    toast(`Không tự điền được hồ sơ doanh nghiệp: ${esc(error.message)}`, "warning");
+  }
+}
+
+async function loadSessionCompanies() {
+  const select = $("session");
+  if (!select) return;
+  try {
+    const response = await fetch("/api/v2/auth/companies");
+    const companies = await response.json();
+    if (!Array.isArray(companies) || !companies.length) return; // keep static fallback
+    const current = select.value;
+    select.innerHTML = companies.map(c =>
+      `<option value="SESS-${esc(String(c.customer_id).replace("COMP-", ""))}">${esc(c.company_name)} · ${esc(c.customer_id)}</option>`
+    ).join("");
+    if ([...select.options].some(o => o.value === current)) select.value = current;
+  } catch (error) { /* keep static fallback options */ }
+}
+
+async function loadLoginCustomerUsers() {
+  const select = $("loginCustomerUser");
+  if (!select) return;
+  try {
+    const response = await fetch("/api/v2/auth/customer-users");
+    const users = await response.json();
+    select.innerHTML = users.map(u =>
+      `<option value="${esc(u.employee_id)}" data-customer-id="${esc(u.customer_id || "")}">${esc(u.company_name)} · ${esc(u.employee_id)}</option>`
+    ).join("");
+  } catch (error) {
+    select.innerHTML = '<option value="USER-MP-001" data-customer-id="COMP-MP">Công ty TNHH Minh Phát · USER-MP-001</option>';
+  }
+}
+
+function showCustomerRegistration(show) {
+  $("loginForm").classList.toggle("hidden", show);
+  $("customerRegistrationForm").classList.toggle("hidden", !show);
+  $("registrationError").textContent = "";
+  if (show) $("registerCompanyName").focus();
+}
+
+async function registerCustomerUser(event) {
+  event.preventDefault();
+  $("registrationError").textContent = "";
+  try {
+    const response = await fetch("/api/v2/auth/customer-users", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        company_name: $("registerCompanyName").value,
+        tax_code: $("registerTaxCode").value,
+        industry: $("registerIndustry").value,
+        contact_name: $("registerContact").value,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.detail?.message || "Không thể tạo hồ sơ.");
+    await Promise.all([loadLoginCustomerUsers(), loadSessionCompanies()]);
+    $("loginRole").value = "customer";
+    $("loginCustomerUser").value = data.employee_id;
+    sessionStorage.setItem("shb_customer_id", data.customer_id);
+    sessionStorage.setItem("shb_company_name", data.company_name);
+    ensureCustomerSessionOption(data.customer_id, data.company_name);
+    showCustomerRegistration(false);
+    syncLoginCustomerVisibility();
+    $("loginRoleHint").textContent = `Đã tạo ${data.employee_id}. Nhập mật khẩu demo để đăng nhập.`;
+    $("loginPassword").focus();
+  } catch (error) {
+    $("registrationError").textContent = error.message;
   }
 }
 
@@ -547,7 +666,7 @@ async function loadCustomerCases(){
 
 function creditRequestPayload(){
   return {
-    customer_id:"COMP-MP",
+    customer_id:loginCustomerId(),
     company_name:$("creditCompanyName").value,
     tax_id:$("creditTaxId").value,
     legal_type:$("creditLegalType").value,
@@ -673,11 +792,12 @@ function creditReadonlyFieldsHtml(row){
 function creditStaffActionsHtml(row,role){
   if(role==="relationship_manager" && row.status==="WithRM"){
     return `<div class="credit-approval-actions">
-      <textarea id="creditSharedRmNote" placeholder="Ghi chú RM khi chuyển (tuỳ chọn)" aria-label="Ghi chú RM"></textarea>
-      <button class="button primary" type="button" onclick="forwardCreditRequest('${row.request_id}',this)">Bổ sung & chuyển chuyên viên thẩm định →</button>
+      <textarea id="creditSharedRmNote" placeholder="Ghi chú khi chuyển sang bước thẩm định (tuỳ chọn)" aria-label="Ghi chú"></textarea>
+      <button class="button primary" type="button" onclick="forwardCreditRequest('${row.request_id}',this)">Hoàn tất hồ sơ & chuyển sang thẩm định →</button>
     </div>`;
   }
-  if(role==="credit_specialist" && row.status==="PendingAppraisal"){
+  // Merged bank-staff persona: the same person forwards then appraises.
+  if((role==="credit_specialist"||role==="relationship_manager") && row.status==="PendingAppraisal"){
     return `<div class="credit-approval-actions">
       <textarea id="creditSharedAppraisalReason" placeholder="Nhận xét thẩm định của chuyên viên..." aria-label="Nhận xét thẩm định"></textarea>
       <button class="button primary" type="button" onclick="appraiseCreditRequest('${row.request_id}','recommend')">Đề nghị trình phê duyệt</button>
@@ -832,7 +952,7 @@ async function loadRmCreditForwardQueue(){
     const rows=realCreditRows(await api("/api/v2/credit-requests"));
     _creditRowsCache=rows;
     renderHero(rows);
-    const waiting=rows.filter(row=>row.status==="WithRM");
+    const waiting=rows.filter(row=>row.status==="WithRM"||row.status==="PendingAppraisal");
     const focus=waiting[0]||rows[0];
     picker.innerHTML=creditPickerHtml(rows,focus?.request_id,"openRmCreditForm");
     if(focus)renderCreditFormView(view,focus,"relationship_manager");
@@ -917,8 +1037,10 @@ async function appraiseCreditRequest(requestId,recommendation){
       headers:{"Idempotency-Key":`credit-appraisal-${requestId}-${Date.now()}`},
       body:JSON.stringify({recommendation,reason})
     });
-    await loadCreditApprovalRequests();
-    toast("Đã lưu thẩm định; Agent đã tạo khuyến nghị giải ngân để Manager xem xét.");
+    // Reload whichever workspace the merged staff persona is looking at.
+    if(!$("rmWorkspace").classList.contains("hidden"))await loadRmCreditForwardQueue();
+    else await loadCreditApprovalRequests();
+    toast("Đã lưu thẩm định; Agent đã tạo khuyến nghị giải ngân để người phê duyệt cuối xem xét.");
   }catch(error){toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error")}
 }
 
@@ -1518,36 +1640,32 @@ function bindWorkspaceEvents() {
 
 // Bind SSO switcher event
 $("loginForm").onsubmit = login;
+$("customerRegistrationForm").onsubmit = registerCustomerUser;
+$("showCustomerRegistration").onclick = () => showCustomerRegistration(true);
+$("showLogin").onclick = () => showCustomerRegistration(false);
 $("logoutButton").onclick = logout;
 
 // Role hint under the login role picker
 const loginRoleHints = {
   customer: "Cổng khách hàng: gửi yêu cầu tín dụng, theo dõi tiến độ hồ sơ.",
-  staff: "Chọn nhân viên giao dịch hoặc chuyên viên thẩm định bên dưới.",
-  manager: "Manager: theo dõi workload đội, chỉ xem số liệu tổng hợp.",
-  "RM-999": "RM: tiếp nhận nhu cầu, chạy agent gợi ý và chuyển tờ trình phê duyệt.",
-  "SPEC-CREDIT-001": "Chuyên viên thẩm định: xem phân tích agent, ra quyết định tín dụng.",
+  staff: "Nhân viên ngân hàng: tạo lại hồ sơ cho khách và thẩm định tín dụng (1 người).",
+  manager: "Người phê duyệt cuối: chịu trách nhiệm giải ngân và xuất tờ trình.",
 };
-function syncLoginStaffVisibility() {
-  const isStaff = $("loginRole")?.value === "staff";
-  const wrap = $("loginStaffWrap");
-  if (wrap) wrap.style.display = isStaff ? "block" : "none";
+function syncLoginCustomerVisibility() {
+  const isCustomer = $("loginRole")?.value === "customer";
+  const wrap = $("loginCustomerWrap");
+  if (wrap) wrap.style.display = isCustomer ? "block" : "none";
 }
 function updateLoginRoleHint() {
   const hint = $("loginRoleHint");
-  if (!hint) return;
-  const role = $("loginRole")?.value;
-  if (role === "staff") {
-    hint.textContent = loginRoleHints[$("loginStaff")?.value] || loginRoleHints.staff;
-  } else {
-    hint.textContent = loginRoleHints[role] || "";
-  }
+  if (hint) hint.textContent = loginRoleHints[$("loginRole")?.value] || "";
 }
 if ($("loginRole")) {
-  $("loginRole").onchange = () => { syncLoginStaffVisibility(); updateLoginRoleHint(); };
-  if ($("loginStaff")) $("loginStaff").onchange = updateLoginRoleHint;
-  syncLoginStaffVisibility();
+  $("loginRole").onchange = () => { syncLoginCustomerVisibility(); updateLoginRoleHint(); };
+  syncLoginCustomerVisibility();
   updateLoginRoleHint();
+  loadLoginCustomerUsers();
+  loadSessionCompanies();
 }
 
 // Bind Personalization preferences change
@@ -1559,9 +1677,11 @@ bindWorkspaceEvents();
 
 setStage(1);
 setIntakeStatus("draft");
+// rmWorkspace là khối hiển thị mặc định trong HTML — ẩn hết ngay khi boot
+// để không lộ UI nhân viên trước khi biết role thật từ /me/context.
+hideAllWorkspaces();
 if (authToken) {
   $("loginScreen").style.display = "none";
-  loadCases();
-  loadEmployeeContext();
+  loadEmployeeContext().then(() => loadCases());
 }
 

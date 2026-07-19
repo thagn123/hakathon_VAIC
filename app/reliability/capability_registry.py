@@ -28,6 +28,9 @@ ROLE_CAPABILITIES: Dict[RoleType, Set[str]] = {
         "document:upload",
         "document:process",
         "credit:forward",
+        # Demo: bank staff is one merged persona (intake + appraisal);
+        # final approval still belongs to Manager only.
+        "credit:appraise",
     },
     RoleType.PRODUCT_SPECIALIST: {
         "case:read",

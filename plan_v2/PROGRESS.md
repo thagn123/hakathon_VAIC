@@ -39,6 +39,7 @@
 | V2-027 | RM forward gate + second agent (service advisory) | Done cho synthetic local MVP | Migration 002, `WithRM`→`PendingApproval`, `POST /forward`, RM UI queue, service recommend unit + API smoke | Service advisory rule-based; chưa tick chọn dịch vụ khi approve |
 | V2-028 | Agent #2 dùng LLM thật (Gemini) có allowlist + fallback rule | Done cho synthetic local MVP | `app/credit/service_advisory_llm.py` tái dùng `BaseExpertRuntime`, `GOOGLE_MODEL=gemini-2.5-flash`, prefix `[AI:Gemini]`/`[Rule]`, API smoke `source=llm` | LLM chỉ chọn trong catalog cố định; key nằm ở `.env`; chưa có eval faithfulness |
 | V2-029 | Tách thẩm định và phê duyệt cuối theo SoD | Done cho synthetic local MVP | Customer response whitelist; `POST /appraisal` cho Credit Specialist; `POST /decision` cho Manager; migration 003; smoke flow 4 vai trò | Agent chỉ khuyến nghị giải ngân; policy/risk model vẫn synthetic, chưa phải quyết định tín dụng production |
+| V2-030 | Khách hàng tự tạo hồ sơ demo | Done cho local/sandbox | `POST /api/v2/auth/customer-users`, form tạo hồ sơ tại màn hình đăng nhập, CRM context tự điền Customer form, `tests/test_auth.py` | Chỉ bật cùng demo auth; dùng mật khẩu demo chung, chưa thay thế onboarding/KYC/SSO thật |
 
 ## Decision log
 
@@ -64,3 +65,4 @@
 - Điểm readiness và gap production: `docs/V2_READINESS_REPORT.md`.
 - Business eval: `data/eval/v2/latest_report.json`.
 - Security/reliability eval: `data/eval/v2/latest_safety_reliability_report.json`.
+- V2-030: `python -m pytest tests/test_auth.py -q` → 4 passed; `python -m pytest tests/test_api_v2.py -q` → 13 passed; `ruff check` và `node --check` pass.

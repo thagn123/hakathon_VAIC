@@ -55,6 +55,22 @@ def login(body: LoginRequest, x_session_id: Optional[str] = Header(None)) -> Log
     )
 
 
+@router.get("/companies", response_model=List[Dict[str, Any]])
+def list_companies() -> List[Dict[str, Any]]:
+    """Public list for the workspace customer switcher: one row per company
+    in `companies`. Only IDs and display names are exposed."""
+    if settings.DATABASE_URL:
+        adapter = PostgresSSOAdapter()
+        with adapter._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT tax_id, company_name FROM companies ORDER BY company_name")
+                rows = cur.fetchall()
+        return [{"customer_id": tax_id, "company_name": name} for tax_id, name in rows]
+    # SQLite dev mirror has no `companies` table; the UI keeps its static
+    # fallback options when this list is empty.
+    return []
+
+
 @router.get("/customer-users", response_model=List[Dict[str, Any]])
 def list_customer_users() -> List[Dict[str, Any]]:
     """Public list for the login screen: customer-portal accounts and the

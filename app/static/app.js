@@ -500,6 +500,21 @@ function loginCustomerId() {
   return sessionStorage.getItem("shb_customer_id") || "COMP-MP";
 }
 
+async function loadSessionCompanies() {
+  const select = $("session");
+  if (!select) return;
+  try {
+    const response = await fetch("/api/v2/auth/companies");
+    const companies = await response.json();
+    if (!Array.isArray(companies) || !companies.length) return; // keep static fallback
+    const current = select.value;
+    select.innerHTML = companies.map(c =>
+      `<option value="SESS-${esc(String(c.customer_id).replace("COMP-", ""))}">${esc(c.company_name)} · ${esc(c.customer_id)}</option>`
+    ).join("");
+    if ([...select.options].some(o => o.value === current)) select.value = current;
+  } catch (error) { /* keep static fallback options */ }
+}
+
 async function loadLoginCustomerUsers() {
   const select = $("loginCustomerUser");
   if (!select) return;
@@ -1571,6 +1586,7 @@ if ($("loginRole")) {
   syncLoginCustomerVisibility();
   updateLoginRoleHint();
   loadLoginCustomerUsers();
+  loadSessionCompanies();
 }
 
 // Bind Personalization preferences change

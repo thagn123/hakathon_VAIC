@@ -648,14 +648,16 @@ p {
   gap: 8px;
 }
 
+/* Action hierarchy: primary = brand blue (proceed), danger = solid red
+   (destructive only). Red is never the default "go" color in a banking UI. */
 .button.primary {
-  background: var(--red);
+  background: var(--blue);
   color: #fff;
 }
 
 .button.primary:hover {
-  background: var(--red-dark);
-  box-shadow: 0 4px 12px rgba(214, 48, 49, 0.2);
+  background: var(--blue-hover);
+  box-shadow: 0 4px 12px rgba(27, 108, 168, 0.25);
 }
 
 .button.secondary {
@@ -668,13 +670,13 @@ p {
 }
 
 .button.danger {
-  background: #fff;
-  border-color: var(--danger);
-  color: var(--danger);
+  background: var(--red);
+  color: #fff;
 }
 
 .button.danger:hover {
-  background: var(--danger-bg);
+  background: var(--red-dark);
+  box-shadow: 0 4px 12px rgba(214, 48, 49, 0.2);
 }
 
 .button.ghost {
@@ -692,6 +694,17 @@ p {
   opacity: 0.5;
   cursor: not-allowed !important;
   box-shadow: none !important;
+}
+
+/* Keyboard accessibility: visible focus ring on every interactive element. */
+.button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+.nbw-item:focus-visible,
+.case-item:focus-visible {
+  outline: 3px solid rgba(27, 108, 168, 0.55);
+  outline-offset: 2px;
 }
 
 /* Status Pills */

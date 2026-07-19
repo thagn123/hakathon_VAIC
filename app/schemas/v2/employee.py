@@ -128,11 +128,14 @@ class NextBestWorkItem(BaseModel):
 
     work_item_id: str
     title: str
+    customer_id: str = ""
     priority_score: float = Field(ge=0.0, le=100.0)
     priority: str  # "high", "medium", "low"
     reasons: List[str]
     excluded_actions: List[str] = Field(default_factory=list)
     recommended_action: str
+    # Agent gợi ý dịch vụ ngân hàng để RM điền thêm vào hồ sơ (không phải mã nội bộ).
+    agent_suggestions: List[str] = Field(default_factory=list)
 
 
 class ConsentModel(BaseModel):

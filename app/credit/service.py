@@ -53,15 +53,31 @@ class CreditReadinessService:
             "summary": (
                 f"Agent chấm điểm sơ bộ {score}/100 ({recommendation}). "
                 + " ".join(findings)
-                + " Đây chỉ là khuyến nghị cho RM; quyết định cuối thuộc Credit Specialist."
+                + " Đây chỉ là khuyến nghị; quyết định giải ngân cuối cùng thuộc Manager."
             ),
         }
 
     def recommend_services(self, request: CorporateCreditRequestCreate) -> Dict[str, Any]:
         """Second agent pass: cross-sell services for the Credit Specialist queue.
 
-        # ponytail: rule-based advisory; swap for product RAG when corpus is wired.
+        LLM picks/justifies from a fixed catalog when configured; otherwise the
+        deterministic rules below run (allowlist means the LLM can't invent a
+        product beyond these).
         """
+        from app.credit.service_advisory_llm import ServiceAdvisoryRuntime
+
+        llm_result = ServiceAdvisoryRuntime().advise({
+            "request_type": request.request_type,
+            "requested_amount_vnd": float(request.requested_amount_vnd),
+            "industry": request.industry,
+            "net_revenue_billion_vnd": float(request.net_revenue_billion_vnd),
+            "casa_avg_balance_billion_vnd": float(request.casa_avg_balance_billion_vnd),
+            "collateral_value_billion_vnd": float(request.collateral_value_billion_vnd),
+            "cic_debt_classification": request.cic_debt_classification,
+        })
+        if llm_result is not None:
+            return llm_result
+
         services: List[Dict[str, Any]] = []
         casa = float(request.casa_avg_balance_billion_vnd)
         revenue = float(request.net_revenue_billion_vnd)
@@ -102,9 +118,10 @@ class CreditReadinessService:
         return {
             "services": services,
             "summary": (
-                f"Agent đề xuất {len(services)} dịch vụ đi kèm (ưu tiên: {names}). "
-                "Chỉ là khuyến nghị; Credit Specialist chọn dịch vụ khi phê duyệt cuối."
+                f"[Rule] Agent đề xuất {len(services)} dịch vụ đi kèm (ưu tiên: {names}). "
+                "Chỉ là khuyến nghị; RM chọn dịch vụ phù hợp khi bổ sung tờ trình."
             ),
+            "source": "rule",
         }
 
     def analyze(

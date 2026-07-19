@@ -40,6 +40,13 @@ class CreditForwardRequest(BaseModel):
     rm_note: str = Field(default="", max_length=2000)
 
 
+class CreditAppraisalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    recommendation: Literal["recommend", "not_recommended", "needs_more_information"]
+    reason: str = Field(min_length=5, max_length=2000)
+
+
 class CreditDecisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

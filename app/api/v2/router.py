@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import uuid
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.actions.executor import ActionExecutorV2, ExecutionDenied
+from app.auth import verify_session_token
 from app.approval.service import ApprovalError, ApprovalServiceV2, payload_hash
 from app.config import settings
 from app.context.assembler import ContextAssembler
@@ -46,7 +48,7 @@ def _iam_adapter():
 def _crm_adapter():
     return PostgresCRMAdapter() if settings.DATABASE_URL else SQLiteCRMAdapter()
 from app.intake import IntakeService, IntakeValidationError
-from app.knowledge.service import DEFAULT_SOURCE_CARD as PRODUCT_SOURCE_CARD, ProductKnowledgeService
+from app.knowledge.service import DEFAULT_PRODUCTS, DEFAULT_SOURCE_CARD as PRODUCT_SOURCE_CARD, ProductKnowledgeService
 from app.knowledge.legal_service import DEFAULT_SOURCE_CARD as LEGAL_SOURCE_CARD, LegalKnowledgeService
 from app.knowledge.parsers import UnsupportedDocumentError, extraction_quality, parse_document_bytes
 from app.knowledge.upload_ingestion import GovernedUploadIngestionService
@@ -147,6 +149,100 @@ class CreateSalesCaseBody(BaseModel):
     current_products: List[str] = Field(default_factory=list)
 
 
+def _intake_assistance(context: ContextSnapshot) -> Dict[str, Any]:
+    """Separate database inheritance, product advice, and credit verification."""
+    attributes = context.customer.attributes
+    employees = attributes.get("employees_count")
+    accounts = attributes.get("account_or_unit_count")
+    revenue = attributes.get("annual_revenue")
+    years = attributes.get("operating_years")
+    database_fields = {
+        "companyName": attributes.get("name"),
+        "taxCode": attributes.get("tax_code"),
+        "industry": attributes.get("industry"),
+    }
+
+    eligible_ids = set()
+    reasons = {}
+    if employees and employees >= 10:
+        eligible_ids.add("PROD-PAYROLL")
+        reasons["PROD-PAYROLL"] = f"CRM ghi nhận {employees} nhân sự."
+    if revenue and revenue >= 50_000_000_000 and accounts and accounts >= 3:
+        eligible_ids.add("PROD-CASH-MGMT")
+        reasons["PROD-CASH-MGMT"] = f"Doanh thu {float(revenue):,.0f} VND và {accounts} tài khoản/đơn vị."
+    if years and years >= 2 and attributes.get("has_bad_debt_12m") is False:
+        eligible_ids.add("PROD-WORKING-CAPITAL")
+        reasons["PROD-WORKING-CAPITAL"] = (
+            f"Hoạt động {years} năm và CRM chưa ghi nhận nợ xấu 12 tháng; "
+            "vẫn cần Credit Agent xác minh hồ sơ."
+        )
+    catalog = json.loads(DEFAULT_PRODUCTS.read_text(encoding="utf-8"))["products"]
+    products = [
+        {
+            "product_id": item["product_id"],
+            "name": item["name"],
+            "family": item["family"],
+            "reason": reasons[item["product_id"]],
+            "eligibility_summary": item["eligibility_summary"],
+            "requires_credit_verification": item["family"] == "credit",
+        }
+        for item in catalog
+        if item.get("active") and item["product_id"] in eligible_ids
+    ]
+
+    positives = []
+    if attributes.get("has_bad_debt_12m") is False:
+        positives.append("CRM chưa ghi nhận nợ xấu trong 12 tháng.")
+    if years:
+        positives.append(f"Doanh nghiệp hoạt động {years} năm.")
+    missing = ["báo cáo tài chính đã xác minh", "dòng tiền trả nợ"]
+    ubo_status = str(attributes.get("ubo_status", "")).lower()
+    if not ubo_status or "chưa" in ubo_status or "not verified" in ubo_status:
+        missing.append("xác minh UBO")
+
+    # Cross-check khai báo CRM với credit_history (CIC mock trong SQLite).
+    cic_records = SQLiteCRMAdapter().list_credit_history(context.customer.customer_id)
+    worst_group = max((int(r["cic_group"]) for r in cic_records), default=None)
+    max_dpd = max((int(r["max_days_past_due_12m"]) for r in cic_records), default=0)
+    restructured = any(r["restructured"] for r in cic_records)
+    if worst_group is None:
+        status = "needs_verification"
+        conclusion = "Chưa có bản ghi CIC; chưa đủ dữ liệu để kết luận chất lượng tín dụng."
+        missing.insert(0, "CIC cập nhật")
+    elif worst_group >= 3 or restructured:
+        status = "warning"
+        conclusion = (
+            f"CIC ghi nhận nợ Nhóm {worst_group}"
+            + (", đã cơ cấu lại thời hạn trả nợ" if restructured else "")
+            + f"; chậm trả tối đa {max_dpd} ngày trong 12 tháng. Cần thẩm định kỹ trước khi đề xuất tín dụng."
+        )
+    elif worst_group == 2:
+        status = "caution"
+        conclusion = (
+            f"CIC Nhóm 2 (nợ cần chú ý), chậm trả tối đa {max_dpd} ngày trong 12 tháng; "
+            "có thể xem xét nhưng cần điều kiện bổ sung."
+        )
+    else:
+        status = "clear"
+        conclusion = f"CIC Nhóm 1 trên {len(cic_records)} khoản, không chậm trả đáng kể trong 12 tháng."
+        positives.append(f"CIC: {len(cic_records)} khoản tín dụng, toàn bộ Nhóm 1.")
+
+    return {
+        "database_fields": {key: value for key, value in database_fields.items() if value},
+        "product_suggestions": products,
+        "credit_assessment": {
+            "status": status,
+            "conclusion": conclusion,
+            "worst_cic_group": worst_group,
+            "cic_record_count": len(cic_records),
+            "positive_signals": positives,
+            "missing_evidence": missing,
+        },
+        "source": "CRM context + credit_history (CIC mock) + danh mục sản phẩm ngân hàng",
+        "requires_human_review": True,
+    }
+
+
 class ProfilePatchBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -194,6 +290,40 @@ def _default_assembler() -> ContextAssembler:
         CustomerContextService(ResilientCRMAdapter(_crm_adapter())),
         ConversationStateService(ConversationStateStore()),
     )
+
+
+def enforce_token_identity(
+    authorization: Optional[str] = Header(None),
+    x_employee_id: Optional[str] = Header(None),
+) -> None:
+    """Fail-closed guard for every /api/v2 route in this router.
+
+    LOGIC: Đầu tiên đọc token đăng nhập; token nói "bạn là ai" thì header
+    X-Employee-ID phải đúng là người đó, nên không ai mượn header để xem
+    dữ liệu của người khác. Không có token thì chỉ cho qua ở chế độ demo.
+    """
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        payload = verify_session_token(token)
+        if payload is not None:
+            if x_employee_id and x_employee_id != payload["sub"]:
+                metrics.increment("security.identity_header_mismatch")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"code": "IDENTITY_MISMATCH", "message": "X-Employee-ID khong khop voi phien dang nhap."},
+                )
+            return
+        if token.startswith("shb."):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "UNAUTHENTICATED", "message": "Phien dang nhap khong hop le hoac da het han."},
+            )
+        return
+    if not settings.DEMO_AUTH_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "UNAUTHENTICATED", "message": "Thieu token dang nhap."},
+        )
 
 
 def create_router(
@@ -455,6 +585,49 @@ def create_router(
             result = repo().save_idempotent_result(replay_key, "create_sales_case", "draft", result)
         response.headers["ETag"] = str(stored.version)
         return result
+
+    @router.get("/sales-cases/intake-suggestions")
+    def get_intake_suggestions(
+        x_employee_id: str = Header(...),
+        x_session_id: str = Header(...),
+    ) -> Dict[str, Any]:
+        require_permission(x_employee_id, "case:write")
+        context = assemble(x_employee_id, x_session_id)
+        result = _intake_assistance(context)
+        logger.emit(
+            "intake_suggestions_generated",
+            employee_id=x_employee_id,
+            customer_id=context.customer.customer_id,
+            fields=list(result["database_fields"]),
+            product_count=len(result["product_suggestions"]),
+        )
+        return result
+
+    @router.get("/sales-cases/credit-history")
+    def get_credit_history(
+        x_employee_id: str = Header(...),
+        x_session_id: str = Header(...),
+    ) -> Dict[str, Any]:
+        """Fetch CIC / internal credit history for the scoped customer."""
+        require_permission(x_employee_id, "case:read")
+        context = assemble(x_employee_id, x_session_id)
+        customer_id = context.customer.customer_id
+        records = SQLiteCRMAdapter().list_credit_history(customer_id)
+        worst = max((int(r["cic_group"]) for r in records), default=None)
+        logger.emit(
+            "credit_history_fetched",
+            employee_id=x_employee_id,
+            customer_id=customer_id,
+            record_count=len(records),
+            worst_cic_group=worst,
+        )
+        return {
+            "customer_id": customer_id,
+            "record_count": len(records),
+            "worst_cic_group": worst,
+            "records": records,
+            "source": "credit_history (SQLite CIC mock)",
+        }
 
     @router.get("/sales-cases")
     def list_sales_cases(x_employee_id: str = Header(...)) -> List[Dict[str, Any]]:

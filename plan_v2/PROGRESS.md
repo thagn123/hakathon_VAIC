@@ -37,6 +37,8 @@
 | V2-018–025 | Intelligent Expert Agent collaboration upgrade | Done cho synthetic local MVP | LangGraph Product/Credit/Insurance, immutable manifests, exact tool allowlist, typed findings/synthesis, Agent Knowledge Console, AI Decision Log và E2E approval/execute tests | LLM/MCP thật, dữ liệu thật và security sign-off production vẫn chưa có; Legal/Eligibility và Operations giữ deterministic |
 | V2-026 | Customer credit request → Agent appraisal → Credit Specialist final decision | Done cho synthetic local MVP | PostgreSQL migration, `/api/v2/credit-requests`, Customer form, Credit Specialist approval queue, appraisal/unit/API smoke tests | Agent appraisal là deterministic screening; chưa thay thế underwriting/risk policy thật |
 | V2-027 | RM forward gate + second agent (service advisory) | Done cho synthetic local MVP | Migration 002, `WithRM`→`PendingApproval`, `POST /forward`, RM UI queue, service recommend unit + API smoke | Service advisory rule-based; chưa tick chọn dịch vụ khi approve |
+| V2-028 | Agent #2 dùng LLM thật (Gemini) có allowlist + fallback rule | Done cho synthetic local MVP | `app/credit/service_advisory_llm.py` tái dùng `BaseExpertRuntime`, `GOOGLE_MODEL=gemini-2.5-flash`, prefix `[AI:Gemini]`/`[Rule]`, API smoke `source=llm` | LLM chỉ chọn trong catalog cố định; key nằm ở `.env`; chưa có eval faithfulness |
+| V2-029 | Tách thẩm định và phê duyệt cuối theo SoD | Done cho synthetic local MVP | Customer response whitelist; `POST /appraisal` cho Credit Specialist; `POST /decision` cho Manager; migration 003; smoke flow 4 vai trò | Agent chỉ khuyến nghị giải ngân; policy/risk model vẫn synthetic, chưa phải quyết định tín dụng production |
 
 ## Decision log
 
@@ -54,7 +56,7 @@
 - Expert Agent không được yêu cầu hoặc lưu Chain-of-Thought; chỉ lưu decision rationale summary, facts/inferences/unknowns và evidence refs đã sanitize.
 - Agent role/tool permission do immutable manifest + trusted runtime identity quyết định; system prompt không phải authorization boundary.
 - Collaboration đi qua Coordinator bằng typed message; hard rule, Evidence Validator, Risk Gate và Approval không bị LLM/Coordinator override.
-- Credit request Agent chỉ đưa khuyến nghị có giải thích; `credit:final_approve` thuộc Credit Specialist và luôn yêu cầu thao tác UI/API rõ ràng cùng lý do.
+- Credit request Agent chỉ đưa khuyến nghị có giải thích; từ V2-029, `credit:appraise` thuộc Credit Specialist và `credit:final_approve` thuộc Manager để tách người thẩm định khỏi người quyết định cuối. Cả hai bước luôn yêu cầu thao tác UI/API rõ ràng cùng lý do.
 
 ## Verification log
 

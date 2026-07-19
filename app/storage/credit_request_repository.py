@@ -21,7 +21,7 @@ class CreditRequestRepository:
         *,
         submitted_by: str,
         idempotency_key: str,
-        appraisal: Dict[str, Any],
+        service_advisory: Dict[str, Any],
     ) -> Dict[str, Any]:
         with pg.connect() as connection:
             existing = connection.execute(
@@ -47,11 +47,11 @@ class CreditRequestRepository:
                     collateral_value_billion_vnd, casa_avg_balance_billion_vnd,
                     repayment_history, request_type, requested_amount_vnd,
                     requested_term_months, purpose, status, appraisal_status,
-                    appraisal_summary, appraisal_score, agent_recommendation,
+                    service_recommendation, service_recommendation_summary,
                     submission_idempotency_key, appraised_at, updated_at
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, 'WithRM', 'completed', ?, ?, ?, ?, CURRENT_TIMESTAMP,
+                    ?, ?, ?, ?, 'WithRM', 'pending', ?, ?, ?, NULL,
                     CURRENT_TIMESTAMP
                 )
                 RETURNING *
@@ -67,7 +67,7 @@ class CreditRequestRepository:
                     values["casa_avg_balance_billion_vnd"], values["repayment_history"],
                     values["request_type"], values["requested_amount_vnd"],
                     values["requested_term_months"], values["purpose"],
-                    appraisal["summary"], appraisal["score"], appraisal["recommendation"],
+                    Json(service_advisory["services"]), service_advisory["summary"],
                     idempotency_key,
                 ),
             ).fetchone()
@@ -119,7 +119,6 @@ class CreditRequestRepository:
         *,
         rm_id: str,
         rm_note: str,
-        service_advisory: Dict[str, Any],
         idempotency_key: str,
     ) -> Dict[str, Any]:
         with pg.connect() as connection:
@@ -136,20 +135,65 @@ class CreditRequestRepository:
             row = connection.execute(
                 """
                 UPDATE corporate_credit_requests
-                SET assigned_rm_id = ?, rm_note = ?, status = 'PendingApproval',
-                    service_recommendation = ?, service_recommendation_summary = ?,
+                SET assigned_rm_id = ?, rm_note = ?, status = 'PendingAppraisal',
                     forward_idempotency_key = ?, forwarded_at = CURRENT_TIMESTAMP,
-                    service_recommended_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE request_id = ? AND status = 'WithRM'
                 RETURNING *
                 """,
                 (
-                    rm_id, rm_note or None, Json(service_advisory["services"]),
-                    service_advisory["summary"], idempotency_key, request_id,
+                    rm_id, rm_note or None, idempotency_key, request_id,
                 ),
             ).fetchone()
             if not row:
                 raise CreditRequestConflict("Request is missing or not waiting for RM forward.")
+            return dict(row)
+
+    def appraise(
+        self,
+        request_id: str,
+        *,
+        expert_id: str,
+        specialist_recommendation: str,
+        specialist_reason: str,
+        agent_appraisal: Dict[str, Any] | None,
+        idempotency_key: str,
+    ) -> Dict[str, Any]:
+        with pg.connect() as connection:
+            replay = connection.execute(
+                "SELECT * FROM corporate_credit_requests WHERE appraisal_idempotency_key = ?",
+                (idempotency_key,),
+            ).fetchone()
+            if replay:
+                if replay["request_id"] != request_id:
+                    raise CreditRequestConflict("Idempotency key belongs to another request.")
+                return dict(replay)
+
+            needs_more = specialist_recommendation == "needs_more_information"
+            row = connection.execute(
+                """
+                UPDATE corporate_credit_requests
+                SET assigned_expert_id = ?, specialist_recommendation = ?,
+                    specialist_reason = ?, appraisal_summary = ?,
+                    appraisal_score = ?, agent_recommendation = ?,
+                    appraisal_status = ?,
+                    appraisal_idempotency_key = ?, appraised_at = CURRENT_TIMESTAMP,
+                    status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE request_id = ? AND status = 'PendingAppraisal'
+                RETURNING *
+                """,
+                (
+                    expert_id, specialist_recommendation, specialist_reason,
+                    agent_appraisal["summary"] if agent_appraisal else None,
+                    agent_appraisal["score"] if agent_appraisal else None,
+                    agent_appraisal["recommendation"] if agent_appraisal else None,
+                    "needs_more_information" if needs_more else "completed",
+                    idempotency_key, "WithRM" if needs_more else "PendingFinalApproval",
+                    request_id,
+                ),
+            ).fetchone()
+            if not row:
+                raise CreditRequestConflict("Request is missing or not awaiting specialist appraisal.")
             return dict(row)
 
     def decide(
@@ -174,7 +218,7 @@ class CreditRequestRepository:
 
             if decision == "needs_more_information":
                 final_decision = None
-                status = "WithRM"
+                status = "PendingAppraisal"
                 appraisal_status = "needs_more_information"
             else:
                 final_decision = decision
@@ -188,7 +232,7 @@ class CreditRequestRepository:
                     approved_by = ?, status = ?, appraisal_status = ?,
                     decision_idempotency_key = ?, decided_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE request_id = ? AND status = 'PendingApproval'
+                WHERE request_id = ? AND status = 'PendingFinalApproval'
                 RETURNING *
                 """,
                 (

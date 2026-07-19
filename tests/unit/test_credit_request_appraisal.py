@@ -41,11 +41,13 @@ def test_agent_flags_high_risk_request_for_human_decision():
     assert result["score"] == 0
 
 
-def test_agent_recommends_services_without_approving():
+def test_agent_recommends_services_without_approving(monkeypatch):
+    # Unit test the deterministic rule path; never hit the network.
+    monkeypatch.setattr("app.config.settings.AGENTIC_LLM_ENABLED", False, raising=False)
     result = CreditReadinessService().recommend_services(request(industry="Xuất nhập khẩu"))
 
     names = {item["service"] for item in result["services"]}
+    assert result["source"] == "rule"
     assert "Vốn lưu động / hạn mức tín dụng" in names
     assert "LC / Bảo lãnh thanh toán quốc tế" in names
     assert "Credit Specialist" in result["summary"]
-    assert "phê duyệt" in result["summary"].lower() or "Credit Specialist" in result["summary"]

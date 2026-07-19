@@ -230,6 +230,39 @@ class ApiClient {
     }
   }
 
+  // --- Corporate credit requests (/api/v2/credit-requests) ---
+  // Same 3-role flow as the static RM UI: customer_user creates, RM forwards,
+  // credit_specialist decides. Raw maps; backend row shape is the contract.
+
+  Future<List<Map<String, dynamic>>> listCreditRequests() async {
+    final uri = Uri.parse('$baseUrl/api/v2/credit-requests');
+    final response = await _client.get(uri, headers: _headers).timeout(const Duration(seconds: 30));
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final data = jsonDecode(response.body);
+      if (data is List) return data.cast<Map<String, dynamic>>();
+      return [];
+    }
+    throw ApiException(statusCode: response.statusCode, message: _parseError(response.body));
+  }
+
+  Future<Map<String, dynamic>> _postCreditRequest(String path, String idempotencyKey, Object body) async {
+    final uri = Uri.parse('$baseUrl/api/v2/credit-requests$path');
+    return _request(
+      () => _client.post(uri, headers: {..._headers, 'Idempotency-Key': idempotencyKey}, body: jsonEncode(body)),
+      (data) => data,
+    );
+  }
+
+  Future<Map<String, dynamic>> createCreditRequest(Map<String, dynamic> payload) =>
+      // ponytail: content-hash dedupe like the static UI, hashCode over SHA-256
+      _postCreditRequest('', 'credit-create-${jsonEncode(payload).hashCode.toRadixString(16).padLeft(8, '0')}', payload);
+
+  Future<Map<String, dynamic>> forwardCreditRequest(String requestId, String rmNote) =>
+      _postCreditRequest('/$requestId/forward', 'credit-forward-$requestId', {'rm_note': rmNote});
+
+  Future<Map<String, dynamic>> decideCreditRequest(String requestId, String decision, String reason) =>
+      _postCreditRequest('/$requestId/decision', 'credit-decision-$requestId-$decision', {'decision': decision, 'reason': reason});
+
   Future<Map<String, dynamic>> getTeamWorkload() async {
     final uri = Uri.parse('$baseUrl/api/v2/me/team/workload');
     final response = await _client.get(uri, headers: _headers).timeout(const Duration(seconds: 30));

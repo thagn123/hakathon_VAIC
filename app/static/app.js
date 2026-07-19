@@ -64,7 +64,8 @@ function setStage(step){
   ["stageInput","stageDocuments","stageProcessing","stageProfile","stageConfirmed"].forEach(id=>$(id).classList.add("hidden"));
   const map={1:"stageInput",2:"stageDocuments",3:"stageProcessing",4:"stageProfile",5:"stageConfirmed"};
   if(map[step])$(map[step]).classList.remove("hidden");
-  document.querySelectorAll("#stepper button").forEach(button=>{const n=Number(button.dataset.step);button.classList.toggle("active",n===step);button.classList.toggle("done",n<step)});
+  const visibleStep=step===1?1:step===5?5:2;
+  document.querySelectorAll("#stepper button").forEach(button=>{const n=Number(button.dataset.step);button.classList.toggle("active",n===visibleStep);button.classList.toggle("done",n<visibleStep)});
   const hints={1:"Nhập nhu cầu thật và tạo hồ sơ.",2:"Nạp hồ sơ doanh nghiệp; hệ thống kiểm tra định dạng và an toàn.",3:"Phân loại, trích xuất field và lưu nguồn.",4:"Đối chiếu dữ liệu và xác nhận hồ sơ.",5:"Hồ sơ đã xác nhận; sẵn sàng để Agent phân tích."};
   $("stageHint").textContent=hints[step]||hints[1];
 }
@@ -94,6 +95,80 @@ async function createCase(){
     const data=await api("/api/v2/sales-cases",{method:"POST",headers:{"Idempotency-Key":`ui-${Date.now()}`},body:JSON.stringify({company_name:$("companyName").value,tax_code:$("taxCode").value,industry:$("industry").value,need_text:$("needText").value,rm_note:$("rmNote").value,priority:"normal",current_products:[]})});
     applyIntake(data);setStage(2);await loadCases();toast(`Đã tạo ${esc(ui.caseId)}. Hãy chọn hồ sơ doanh nghiệp để Agent xử lý.`);
   }catch(error){toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}. Không có action bên ngoài nào được thực hiện.`,"error")}
+}
+
+async function loadIntakeSuggestions(){
+  const status=$("intakeAiStatus");
+  if(!status)return;
+  status.textContent="Đang tải dữ liệu CRM và chạy hai agent tư vấn...";
+  try{
+    const data=await api("/api/v2/sales-cases/intake-suggestions");
+    const databaseFields=data.database_fields||{};
+    Object.entries(databaseFields).forEach(([fieldId,value])=>{
+      if($(fieldId))$(fieldId).value=value;
+    });
+    status.textContent=`Đã kế thừa ${Object.keys(databaseFields).length} trường từ ${data.source}.`;
+    const products=data.product_suggestions||[];
+    $("productAdviceList").innerHTML=products.length?`<ul>${products.map(product=>`
+      <li><b>${esc(product.name)}</b>${product.requires_credit_verification?" · cần thẩm định tín dụng":""}<br>
+      <small>${esc(product.reason)} Điều kiện: ${esc(product.eligibility_summary)}</small></li>`).join("")}</ul>`
+      :'<p class="muted">Chưa có sản phẩm đủ căn cứ để gợi ý.</p>';
+    const credit=data.credit_assessment||{};
+    const creditTone=credit.status==="clear"?"success":credit.status==="warning"?"danger":"warning";
+    $("creditAssessment").innerHTML=`
+      <div class="notice ${creditTone}"><b>${esc(credit.conclusion||"Chưa thể kết luận")}</b></div>
+      ${(credit.positive_signals||[]).length?`<p><b>Tín hiệu hiện có</b></p><ul>${credit.positive_signals.map(item=>`<li>${esc(item)}</li>`).join("")}</ul>`:""}
+      <p><b>Cần Credit Agent xác minh</b></p>
+      <ul>${(credit.missing_evidence||[]).map(item=>`<li>${esc(item)}</li>`).join("")}</ul>
+      <div class="button-row" style="margin-top:10px">
+        <button type="button" id="viewCreditHistory" class="button secondary">Xem chi tiết lịch sử tín dụng</button>
+      </div>
+      <div id="creditHistoryDetail" class="hidden" style="margin-top:10px"></div>`;
+    const viewBtn=$("viewCreditHistory");
+    if(viewBtn)viewBtn.onclick=()=>loadCicCreditHistory();
+  }catch(error){
+    status.textContent=`Không tải được gợi ý: ${error.message}`;
+    $("productAdviceList").innerHTML='<p class="muted">Không có dữ liệu.</p>';
+    $("creditAssessment").innerHTML='<p class="muted">Không có dữ liệu.</p>';
+  }
+}
+
+async function loadCicCreditHistory(){
+  const detail=$("creditHistoryDetail");
+  const btn=$("viewCreditHistory");
+  if(!detail)return;
+  detail.classList.remove("hidden");
+  detail.innerHTML='<p class="muted">Đang fetch CIC / lịch sử tín dụng...</p>';
+  if(btn)btn.disabled=true;
+  try{
+    const data=await api("/api/v2/sales-cases/credit-history");
+    const records=data.records||[];
+    if(!records.length){
+      detail.innerHTML=`<p class="muted">Không có bản ghi credit_history cho <b>${esc(data.customer_id)}</b>.</p>`;
+      return;
+    }
+    const groupLabel=g=>`Nhóm ${g}`;
+    const fmtVnd=n=>Number(n).toLocaleString("vi-VN")+" ₫";
+    detail.innerHTML=`
+      <div class="notice ${data.worst_cic_group>=2?"warning":"success"}">
+        <b>${esc(data.customer_id)}</b> · ${records.length} khoản ·
+        CIC xấu nhất: <b>${data.worst_cic_group!=null?groupLabel(data.worst_cic_group):"—"}</b>
+      </div>
+      <ul>${records.map(r=>`
+        <li>
+          <b>${esc(r.facility_type)}</b> · ${esc(r.lender)} · ${esc(r.source)}
+          · ${groupLabel(r.cic_group)} · ${esc(r.status)}
+          ${r.restructured?" · đã cơ cấu":""}
+          <br><small>Dư nợ ${fmtVnd(r.outstanding_amount_vnd)} / gốc ${fmtVnd(r.original_amount_vnd)}
+          · DPD max 12tháng: ${r.max_days_past_due_12m} ngày
+          · Báo cáo ${esc(r.reported_at)}</small>
+          ${r.note?`<br><small>${esc(r.note)}</small>`:""}
+        </li>`).join("")}</ul>`;
+  }catch(error){
+    detail.innerHTML=`<p class="muted">Lỗi: ${esc(error.message)}</p>`;
+  }finally{
+    if(btn)btn.disabled=false;
+  }
 }
 function resetRuntime(){ui.caseId=null;ui.intakeVersion=null;ui.stateVersion=null;ui.runtime=null;ui.profile=null;ui.conflicts=[];ui.documents=[];ui.pendingFiles=[];ui.approvalToken=null;ui.previewHash=null;$("resultsPanel").classList.add("hidden");renderControlLogs([],[],[])}
 function applyIntake(data){ui.caseId=data.case_id;ui.intakeVersion=data.version;ui.intakeStatus=data.intake_status;ui.profile=data.profile;ui.conflicts=data.conflicts||[];setIntakeStatus(data.intake_status);if(data.profile)renderProfile(data.profile,ui.conflicts);updateSummary()}
@@ -271,7 +346,7 @@ async function openCase(caseId){try{const items=await api("/api/v2/sales-cases")
 // =====================================================================
 
 async function loadEmployeeContext() {
-  const empId = $("employee").value;
+  let empId = $("employee").value;
 
   // FAIL-CLOSED: Simulate error conditions
   if (empId === "EXPIRED_TOKEN" || empId === "IAM_ERROR") {
@@ -281,6 +356,13 @@ async function loadEmployeeContext() {
 
   try {
     const data = await api("/api/v2/me/context");
+
+    // The session token is the identity source of truth. A stale token from a
+    // previous login must not run under the dropdown's default employee.
+    if (data.employee_id && data.employee_id !== empId) {
+      empId = data.employee_id;
+      $("employee").value = empId;
+    }
 
     // Apply personalization from server
     const pCtx = data.personalization_context;
@@ -302,8 +384,9 @@ async function loadEmployeeContext() {
     const role = data.authorization_context?.roles?.[0];
     routeWorkspace(role);
 
-    const roleLabel = { customer_user:"Người dùng", relationship_manager:"Nhân viên giao dịch", legal_specialist:"Legal/Compliance Reviewer", product_specialist:"Product Specialist", credit_specialist:"Người phê duyệt cuối", insurance_specialist:"Insurance Specialist", manager:"Manager" }[role] || role;
+    const roleLabel = { customer_user:"Người dùng", relationship_manager:"Nhân viên giao dịch", legal_specialist:"Legal/Compliance Reviewer", product_specialist:"Product Specialist", credit_specialist:"Chuyên viên thẩm định", insurance_specialist:"Insurance Specialist", manager:"Người phê duyệt cuối" }[role] || role;
     $("roleBadge").textContent = `Role: ${roleLabel}`;
+    if($("heroRole"))$("heroRole").textContent = `Role hiện tại: ${roleLabel} (${empId})`;
     toast(`SSO <b>${esc(empId)}</b> · Role: <b>${esc(roleLabel)}</b>`);
   } catch (error) {
     hideAllWorkspaces();
@@ -354,6 +437,7 @@ function routeWorkspace(role) {
     $("workspaceTitle").textContent = "RM Workspace · Personalization Active";
     loadNextBestWorkQueue();
     loadRmCreditForwardQueue();
+    loadIntakeSuggestions();
   } else if (role.endsWith("_specialist")) {
     $("personalizationPanel").classList.remove("hidden");
     $("session").disabled = false;
@@ -363,21 +447,31 @@ function routeWorkspace(role) {
     if(role==="credit_specialist")loadCreditApprovalRequests();
     else $("creditApprovalPanel").classList.add("hidden");
     loadAgentKnowledgeConsole();
-    loadAgentActivity();
+    loadCreditHistory();
   } else if (role === "manager") {
     $("personalizationPanel").classList.remove("hidden");
     $("session").disabled = false;
     $("managerWorkspace").classList.remove("hidden");
-    $("workspaceTitle").textContent = "Manager Console · Aggregate Metrics Only";
+    $("workspaceTitle").textContent = "Manager Console · Phê duyệt cuối";
     loadManagerWorkload();
+    loadManagerApprovalRequests();
   }
+}
+
+function resolveLoginEmployeeId() {
+  const role = $("loginRole")?.value;
+  if (role === "customer") return "USER-MP-001";
+  if (role === "staff") return $("loginStaff").value;
+  if (role === "manager") return "MGR-HN-01";
+  return $("loginEmployee")?.value || "RM-999";
 }
 
 async function login(event) {
   event.preventDefault();
   $("loginError").textContent = "";
   try {
-    const response = await fetch("/api/v2/auth/login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({employee_id:$("loginEmployee").value, password:$("loginPassword").value})});
+    const employeeId = resolveLoginEmployeeId();
+    const response = await fetch("/api/v2/auth/login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({employee_id:employeeId, password:$("loginPassword").value})});
     const data = await response.json();
     if (!response.ok) throw new Error(data?.detail?.message || "Đăng nhập thất bại.");
     authToken = data.access_token;
@@ -494,30 +588,41 @@ function formatServiceRecommendation(row){
 
 function creditAgentBlocksHtml(row,{showInternal=true}={}){
   if(!showInternal){
-    return `<div class="notice"><b>Trạng thái:</b> ${esc(row.status)}${row.final_decision?` · Quyết định: ${esc(row.final_decision)}`:""}${row.decision_reason?`<br><small>${esc(row.decision_reason)}</small>`:""}</div>`;
+    return `<div class="notice"><b>Trạng thái hồ sơ:</b> ${esc(creditStatusVi(row.status))}</div>`;
   }
-  const agent1=row.appraisal_summary?`
+  const rawSummary=row.service_recommendation_summary||"";
+  const isLlm=rawSummary.startsWith("[AI");
+  const summary=rawSummary.replace(/^\[(AI:Gemini|Rule)\]\s*/,"");
+  const hasServices=Array.isArray(row.service_recommendation)&&row.service_recommendation.length;
+  const srcBadge=hasServices?`<span class="src-badge ${isLlm?"src-llm":"src-rule"}">${isLlm?"AI thật (Gemini)":"Rule"}</span>`:"";
+  const services=summary||hasServices?`
     <fieldset class="credit-section">
-      <legend>7. Agent #1 · Thẩm định tín dụng</legend>
-      <div class="notice ${row.agent_recommendation==="recommend"?"success":"warning"}">
-        <b>${esc(row.agent_recommendation)} (${esc(row.appraisal_score)}/100)</b><br>${esc(row.appraisal_summary)}
-      </div>
-    </fieldset>`:"";
-  const agent2=row.service_recommendation_summary||(Array.isArray(row.service_recommendation)&&row.service_recommendation.length)?`
-    <fieldset class="credit-section">
-      <legend>8. Agent #2 · Dịch vụ đi kèm</legend>
+      <legend>7. Agent · Gợi ý dịch vụ cho RM ${srcBadge}</legend>
       <div class="notice success">
-        <b>${esc(row.service_recommendation_summary||"Đề xuất dịch vụ")}</b>
+        <b>${esc(summary||"Đề xuất dịch vụ")}</b>
         ${formatServiceRecommendation(row)}
         ${row.rm_note?`<p><small>Ghi chú RM: ${esc(row.rm_note)}</small></p>`:""}
       </div>
     </fieldset>`:"";
+  const specialist=row.specialist_recommendation?`
+    <fieldset class="credit-section">
+      <legend>8. Chuyên viên · Kết quả thẩm định</legend>
+      <p><b>${esc(row.specialist_recommendation)}</b> — ${esc(row.specialist_reason||"")}</p>
+    </fieldset>`:"";
+  const disbursement=row.appraisal_summary?`
+    <fieldset class="credit-section">
+      <legend>9. Agent · Khuyến nghị giải ngân</legend>
+      <div class="notice ${row.agent_recommendation==="recommend"?"success":"warning"}">
+        <b>${row.agent_recommendation==="recommend"?"Nên xem xét giải ngân":"Không khuyến nghị giải ngân"} (${esc(row.appraisal_score)}/100)</b><br>${esc(row.appraisal_summary)}
+        <p><small>Chỉ là khuyến nghị; Manager chịu trách nhiệm quyết định cuối.</small></p>
+      </div>
+    </fieldset>`:"";
   const decision=row.final_decision||row.decision_reason?`
     <fieldset class="credit-section">
-      <legend>9. Quyết định Credit Specialist</legend>
+      <legend>10. Quyết định cuối của Manager</legend>
       <p><b>${esc(row.final_decision||row.status)}</b> — ${esc(row.decision_reason||"")}</p>
     </fieldset>`:"";
-  return agent1+agent2+decision;
+  return services+specialist+disbursement+decision;
 }
 
 function creditReadonlyFieldsHtml(row){
@@ -569,36 +674,34 @@ function creditStaffActionsHtml(row,role){
   if(role==="relationship_manager" && row.status==="WithRM"){
     return `<div class="credit-approval-actions">
       <textarea id="creditSharedRmNote" placeholder="Ghi chú RM khi chuyển (tuỳ chọn)" aria-label="Ghi chú RM"></textarea>
-      <button class="button primary" type="button" onclick="forwardCreditRequest('${row.request_id}')">Duyệt & chuyển trên form này →</button>
+      <button class="button primary" type="button" onclick="forwardCreditRequest('${row.request_id}',this)">Bổ sung & chuyển chuyên viên thẩm định →</button>
     </div>`;
   }
-  if(role==="credit_specialist" && row.status==="PendingApproval"){
+  if(role==="credit_specialist" && row.status==="PendingAppraisal"){
     return `<div class="credit-approval-actions">
-      <textarea id="creditSharedReason" placeholder="Lý do quyết định cuối..." aria-label="Lý do quyết định"></textarea>
-      <button class="button primary" type="button" onclick="decideCreditRequest('${row.request_id}','approved')">Phê duyệt</button>
-      <button class="button secondary" type="button" onclick="decideCreditRequest('${row.request_id}','needs_more_information')">Trả RM bổ sung</button>
+      <textarea id="creditSharedAppraisalReason" placeholder="Nhận xét thẩm định của chuyên viên..." aria-label="Nhận xét thẩm định"></textarea>
+      <button class="button primary" type="button" onclick="appraiseCreditRequest('${row.request_id}','recommend')">Đề nghị trình phê duyệt</button>
+      <button class="button secondary" type="button" onclick="appraiseCreditRequest('${row.request_id}','needs_more_information')">Yêu cầu RM bổ sung</button>
+      <button class="button danger" type="button" onclick="appraiseCreditRequest('${row.request_id}','not_recommended')">Không đề nghị</button>
+    </div>`;
+  }
+  if(role==="manager" && row.status==="PendingFinalApproval"){
+    return `<div class="credit-approval-actions">
+      <textarea id="creditSharedReason" placeholder="Lý do quyết định cuối của Manager..." aria-label="Lý do quyết định"></textarea>
+      <button class="button primary" type="button" onclick="decideCreditRequest('${row.request_id}','approved')">Phê duyệt giải ngân</button>
+      <button class="button secondary" type="button" onclick="decideCreditRequest('${row.request_id}','needs_more_information')">Trả lại thẩm định</button>
       <button class="button danger" type="button" onclick="decideCreditRequest('${row.request_id}','rejected')">Từ chối</button>
     </div>`;
   }
   return `<p class="muted">Không có thao tác cho trạng thái ${esc(row.status)}.</p>`;
 }
 
-function renderCreditFormView(container,row,role){
-  if(!container)return;
-  container.innerHTML=`
-    <p><b>${esc(row.request_id)}</b> · ${esc(row.status)}</p>
-    ${creditReadonlyFieldsHtml(row)}
-    ${creditAgentBlocksHtml(row,{showInternal:true})}
-    ${creditStaffActionsHtml(row,role)}`;
-}
-
 function showCustomerAgentOnForm(row){
   const box=$("creditAgentOnForm");
   if(!box)return;
   box.classList.remove("hidden");
-  box.innerHTML=creditAgentBlocksHtml(row,{showInternal:false})+`
-    <div class="notice success"><b>Agent #1 đã chạy trên form này</b><br>${esc(row.appraisal_summary)}</div>
-    <p class="muted">RM và Credit Specialist sẽ mở cùng tờ trình để xem Agent và duyệt.</p>`;
+  box.innerHTML=creditAgentBlocksHtml(row,{showInternal:false})+
+    `<p class="muted">Bạn chỉ xem form và trạng thái công khai. Gợi ý Agent, nhận xét thẩm định và nội dung phê duyệt là dữ liệu nội bộ.</p>`;
 }
 
 let _creditRowsCache=[];
@@ -620,7 +723,7 @@ async function submitCreditRequest(event){
     result.innerHTML=`<b>Đã gửi ${esc(row.request_id)}</b><small> · ${esc(row.status)}</small>`;
     showCustomerAgentOnForm(row);
     await loadCustomerCreditRequests();
-    toast(`Agent đã thẩm định trên form · ${esc(row.request_id)}`);
+    toast(`Đã gửi form ${esc(row.request_id)} cho RM xử lý.`);
   }catch(error){toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error")}
   finally{button.disabled=false}
 }
@@ -632,8 +735,8 @@ async function loadCustomerCreditRequests(){
     $("creditRequestList").innerHTML=rows.length?rows.map(row=>`
       <button type="button" class="customer-case-item credit-list-item" onclick="openCustomerCreditForm('${row.request_id}')">
         <b>${esc(row.request_id)}</b><br>
-        <span>${esc(row.status)}</span> · Agent: ${esc(row.agent_recommendation)}<br>
-        <small>${esc(row.decision_reason||(row.status==="WithRM"?"Đang chờ RM":row.status==="PendingApproval"?"Đang chờ phê duyệt cuối":"Đang xử lý"))}</small>
+        <span>${esc(creditStatusVi(row.status))}</span><br>
+        <small>${esc(row.status==="WithRM"?"Đang chờ RM":row.status==="PendingAppraisal"?"Đang thẩm định":row.status==="PendingFinalApproval"?"Đang chờ phê duyệt cuối":"Đã xử lý")}</small>
       </button>`).join(""):'<p class="muted">Chưa có yêu cầu.</p>';
   }catch(error){$("creditRequestList").innerHTML=`<p class="muted">${esc(error.message)}</p>`}
 }
@@ -672,12 +775,53 @@ function openCustomerCreditForm(requestId){
   toast(`Đã mở tờ trình ${esc(requestId)} trên form.`);
 }
 
-function creditPickerHtml(rows,selectedId,onClickName){
+// Customer form -> RM -> specialist appraisal -> Manager final approval.
+function renderHero(rows){
+  const flow=$("heroFlow");
+  if(!flow)return;
+  const count=status=>rows.filter(r=>r.status===status).length;
+  const mainSteps=[["WithRM","① Chờ RM"],["PendingAppraisal","② Chờ thẩm định"],["PendingFinalApproval","③ Chờ Manager"],["Approved","④ Đã duyệt giải ngân"]];
+  const mainHtml=mainSteps.map(([status,label],index)=>
+    `<span class="${count(status)?"flow-active":""}">${label}: ${count(status)}</span>${index<mainSteps.length-1?"<i>→</i>":""}`).join("");
+  flow.innerHTML=`${mainHtml}<i>↘</i><span class="flow-reject">✕ Từ chối (RM/cuối): ${count("Rejected")}</span>`;
+}
+
+function creditStatusVi(status){
+  return {WithRM:"Chờ RM",PendingAppraisal:"Chờ chuyên viên thẩm định",PendingFinalApproval:"Chờ Manager phê duyệt",Approved:"Đã duyệt · giải ngân",Rejected:"Từ chối"}[status]||status;
+}
+
+function creditRecordFlowHtml(row){
+  const steps=[["WithRM","① Form khách hàng"],["PendingAppraisal","② Chuyên viên thẩm định"],["PendingFinalApproval","③ Agent khuyến nghị"],["Approved","④ Manager duyệt"]];
+  const rank={WithRM:0,PendingAppraisal:1,PendingFinalApproval:2,Approved:3,Rejected:-1};
+  const current=rank[row.status]??0;
+  const rejected=row.status==="Rejected";
+  const main=steps.map(([_,label],index)=>{
+    let cls="";
+    if(rejected)cls=index===0?"done":"";
+    else if(index<current)cls="done";
+    else if(index===current)cls="active";
+    return `<span class="${cls}">${label}</span>${index<steps.length-1?"<i>→</i>":""}`;
+  }).join("");
+  return `<div class="record-flow" aria-label="Luồng hồ sơ hiện tại">${main}${rejected?'<i>↘</i><span class="active reject">✕ Từ chối</span>':""}</div>`;
+}
+
+function creditPickerHtml(rows,selectedId,onChangeName){
   if(!rows.length)return '<p class="muted">Không có tờ trình.</p>';
-  return `<div class="credit-picker-row">${rows.map(row=>`
-    <button type="button" class="button ${row.request_id===selectedId?"primary":"secondary"}" onclick="${onClickName}('${row.request_id}')">
-      ${esc(row.request_id)} · ${esc(row.status)}
-    </button>`).join("")}</div>`;
+  return `<label>Chọn tờ trình
+    <select onchange="${onChangeName}(this.value)">
+      ${rows.map(row=>`<option value="${esc(row.request_id)}" ${row.request_id===selectedId?"selected":""}>${esc(row.request_id)} · ${creditStatusVi(row.status)}</option>`).join("")}
+    </select>
+  </label>`;
+}
+
+function renderCreditFormView(container,row,role){
+  if(!container)return;
+  container.innerHTML=`
+    <p><b>${esc(row.request_id)}</b> · ${creditStatusVi(row.status)}</p>
+    ${creditRecordFlowHtml(row)}
+    ${creditReadonlyFieldsHtml(row)}
+    ${creditAgentBlocksHtml(row,{showInternal:true})}
+    ${creditStaffActionsHtml(row,role)}`;
 }
 
 async function loadRmCreditForwardQueue(){
@@ -687,6 +831,7 @@ async function loadRmCreditForwardQueue(){
   try{
     const rows=realCreditRows(await api("/api/v2/credit-requests"));
     _creditRowsCache=rows;
+    renderHero(rows);
     const waiting=rows.filter(row=>row.status==="WithRM");
     const focus=waiting[0]||rows[0];
     picker.innerHTML=creditPickerHtml(rows,focus?.request_id,"openRmCreditForm");
@@ -698,12 +843,12 @@ async function loadRmCreditForwardQueue(){
 function openRmCreditForm(requestId){
   const row=_creditRowsCache.find(r=>r.request_id===requestId);
   if(!row)return;
-  $("rmCreditPicker").innerHTML=creditPickerHtml(_creditRowsCache,requestId,"openRmCreditForm");
   renderCreditFormView($("rmCreditFormView"),row,"relationship_manager");
 }
 
-async function forwardCreditRequest(requestId){
+async function forwardCreditRequest(requestId,btn){
   const note=($("creditSharedRmNote")?.value||"").trim();
+  if(btn)btn.disabled=true;
   try{
     const row=await api(`/api/v2/credit-requests/${requestId}/forward`,{
       method:"POST",
@@ -712,7 +857,12 @@ async function forwardCreditRequest(requestId){
     });
     toast(`Đã chuyển trên form · Agent #2: ${esc(row.service_recommendation_summary||"đã đề xuất")}`);
     await loadRmCreditForwardQueue();
-  }catch(error){toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error")}
+  }catch(error){
+    if(error.code==="CREDIT_REQUEST_CONFLICT"){
+      toast("Tờ trình này đã được chuyển hoặc quyết định rồi — đang tải lại trạng thái mới.","warning");
+      await loadRmCreditForwardQueue();
+    }else toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error");
+  }finally{if(btn)btn.disabled=false}
 }
 
 async function loadCreditApprovalRequests(){
@@ -724,8 +874,8 @@ async function loadCreditApprovalRequests(){
     const rows=realCreditRows(await api("/api/v2/credit-requests"));
     _creditRowsCache=rows;
     panel.classList.remove("hidden");
-    const queue=rows.filter(row=>row.status==="PendingApproval"||row.final_decision);
-    const focus=queue.find(r=>r.status==="PendingApproval")||queue[0]||rows[0];
+    const queue=rows.filter(row=>row.status==="PendingAppraisal"||row.specialist_recommendation);
+    const focus=queue.find(r=>r.status==="PendingAppraisal")||queue[0]||rows[0];
     picker.innerHTML=creditPickerHtml(queue.length?queue:rows,focus?.request_id,"openCsCreditForm");
     if(focus)renderCreditFormView(view,focus,"credit_specialist");
     else view.innerHTML='<p class="muted">Không có tờ trình.</p>';
@@ -735,9 +885,13 @@ async function loadCreditApprovalRequests(){
 function openCsCreditForm(requestId){
   const row=_creditRowsCache.find(r=>r.request_id===requestId);
   if(!row)return;
-  const queue=_creditRowsCache.filter(r=>r.status==="PendingApproval"||r.final_decision);
-  $("csCreditPicker").innerHTML=creditPickerHtml(queue.length?queue:_creditRowsCache,requestId,"openCsCreditForm");
+  const panel=$("creditApprovalPanel");
+  if(!panel||panel.classList.contains("hidden")){
+    toast("Form phê duyệt tờ trình chỉ mở cho Credit Specialist.","warning");
+    return;
+  }
   renderCreditFormView($("csCreditFormView"),row,"credit_specialist");
+  panel.scrollIntoView({behavior:"smooth",block:"start"});
 }
 
 async function decideCreditRequest(requestId,decision){
@@ -749,9 +903,42 @@ async function decideCreditRequest(requestId,decision){
       headers:{"Idempotency-Key":`credit-decision-${requestId}-${Date.now()}`},
       body:JSON.stringify({decision,reason})
     });
-    await loadCreditApprovalRequests();
+    await loadManagerApprovalRequests();
     toast(`Đã lưu quyết định ${esc(decision)} trên form ${esc(requestId)}.`);
   }catch(error){toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error")}
+}
+
+async function appraiseCreditRequest(requestId,recommendation){
+  const reason=($("creditSharedAppraisalReason")?.value||"").trim();
+  if(reason.length<5)return toast("Hãy nhập nhận xét thẩm định (ít nhất 5 ký tự).","warning");
+  try{
+    await api(`/api/v2/credit-requests/${requestId}/appraisal`,{
+      method:"POST",
+      headers:{"Idempotency-Key":`credit-appraisal-${requestId}-${Date.now()}`},
+      body:JSON.stringify({recommendation,reason})
+    });
+    await loadCreditApprovalRequests();
+    toast("Đã lưu thẩm định; Agent đã tạo khuyến nghị giải ngân để Manager xem xét.");
+  }catch(error){toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error")}
+}
+
+async function loadManagerApprovalRequests(){
+  const picker=$("managerCreditPicker"),view=$("managerCreditFormView");
+  if(!picker||!view)return;
+  try{
+    const rows=realCreditRows(await api("/api/v2/credit-requests"));
+    _creditRowsCache=rows;
+    const queue=rows.filter(row=>row.status==="PendingFinalApproval"||row.final_decision);
+    const focus=queue.find(row=>row.status==="PendingFinalApproval")||queue[0];
+    picker.innerHTML=creditPickerHtml(queue,focus?.request_id,"openManagerCreditForm");
+    if(focus)renderCreditFormView(view,focus,"manager");
+    else view.innerHTML='<p class="muted">Không có tờ trình chờ phê duyệt cuối.</p>';
+  }catch(error){picker.innerHTML="";view.innerHTML=`<p class="muted">${esc(error.message)}</p>`}
+}
+
+function openManagerCreditForm(requestId){
+  const row=_creditRowsCache.find(item=>item.request_id===requestId);
+  if(row)renderCreditFormView($("managerCreditFormView"),row,"manager");
 }
 
 async function loadNextBestWorkQueue() {
@@ -767,12 +954,15 @@ async function loadNextBestWorkQueue() {
     container.innerHTML = queue.slice(0,5).map(item => {
       const priorityClass = item.priority_score >= 80 ? "high" : (item.priority_score >= 50 ? "medium" : "low");
       const bandLabel = item.priority_band === 0 ? "P0 Regulatory" : (item.priority_band === 1 ? "P1 SLA" : (item.priority_band === 2 ? "P2 Customer" : "P3 Normal"));
-      
+      const suggestions = (item.agent_suggestions && item.agent_suggestions.length)
+        ? item.agent_suggestions.join(" · ")
+        : item.recommended_action;
       return `
         <div class="nbw-item ${priorityClass}" onclick="toast('Nhiệm vụ: ${esc(item.title)}. Lý do: ${esc(item.reasons.join('; '))}', 'warning')">
           <span class="nbw-badge ${priorityClass}">${bandLabel} · ${item.priority_score} pts</span>
           <h4>${esc(item.title)}</h4>
-          <p>Khách hàng: <b>${esc(item.customer_id)}</b> · Đề xuất: <code>${esc(item.recommended_action)}</code></p>
+          <p>Khách hàng: <b>${esc(item.customer_id || "—")}</b></p>
+          <p><b>Gợi ý Agent:</b> ${esc(suggestions)}</p>
           <small class="muted" style="display:block; margin-top:4px;">Lý do: ${esc(item.reasons.join(", "))}</small>
         </div>
       `;
@@ -860,7 +1050,7 @@ async function submitAgentKnowledgeEntry(event) {
     $("akText").value = "";
     toast("Đã nạp tri thức mới cho Agent.", "success");
     loadAgentKnowledgeConsole();
-    loadAgentActivity();
+    loadCreditHistory();
   } catch (error) {
     toast(`<b>${esc(error.code || "API_ERROR")}:</b> ${esc(error.message)}`, "error");
   }
@@ -889,21 +1079,61 @@ async function toggleAgentKnowledgeQuarantine(chunkId, next) {
   }
 }
 
-async function loadAgentActivity() {
+// Lịch sử tờ trình: business-facing timeline per credit request
+// (khách gửi -> Agent thẩm định -> RM chuyển -> quyết định cuối).
+// Thay thế panel Agent Activity kỹ thuật cũ; dữ liệu lấy từ các cột
+// timestamp/decision đã có trong corporate_credit_requests, không cần API mới.
+let _creditHistoryFilter = "open";
+
+function setCreditHistoryFilter(filter) {
+  _creditHistoryFilter = filter;
+  document.querySelectorAll(".credit-history-filters .button").forEach(button => {
+    button.classList.toggle("is-selected", button.dataset.filter === filter);
+  });
+  loadCreditHistory();
+}
+
+function creditHistoryTimeToText(value) {
+  return value ? new Date(value).toLocaleString("vi-VN", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}) : "";
+}
+
+function creditHistoryStepsHtml(row) {
+  const decidedLabel = {approved: "Phê duyệt", rejected: "Từ chối", needs_more_information: "Trả RM bổ sung"}[row.final_decision] || row.final_decision;
+  const steps = [
+    {done: true, text: `Khách gửi tờ trình · ${creditHistoryTimeToText(row.submitted_at)}`},
+    {done: !!row.appraised_at, text: row.appraised_at
+      ? `Agent #1: ${esc(row.agent_recommendation || "—")} (score ${row.appraisal_score ?? "—"}) · ${creditHistoryTimeToText(row.appraised_at)}`
+      : "Agent thẩm định — chưa chạy"},
+    {done: row.status !== "WithRM", text: row.status !== "WithRM"
+      ? `RM đã chuyển phê duyệt${row.rm_note ? ` · “${esc(row.rm_note)}”` : ""}`
+      : "Đang chờ RM chuyển"},
+    {done: !!row.final_decision, text: row.final_decision
+      ? `${esc(decidedLabel)} bởi ${esc(row.approved_by || "chuyên gia")} · ${creditHistoryTimeToText(row.decided_at)}${row.decision_reason ? `<br>Lý do: “${esc(row.decision_reason)}”` : ""}`
+      : "Chờ quyết định cuối"},
+  ];
+  return `<ol class="credit-history-steps">${steps.map(step => `<li class="${step.done ? "" : "step-pending"}">${step.text}</li>`).join("")}</ol>`;
+}
+
+async function loadCreditHistory() {
+  const container = $("creditHistoryList");
+  if (!container) return;
   try {
-    const data = await api("/api/v2/me/agent-knowledge/activity");
-    $("akActivitySummary").innerHTML = `<b>${data.active_knowledge_entry_count}/${data.knowledge_entry_count}</b> mục tri thức đang hoạt động · <b>${data.cases.length}</b> case trong phạm vi.`;
-    const container = $("akActivityCases");
-    if (!data.cases.length) { container.innerHTML = '<p class="muted">Chưa có case nào trong phạm vi khách hàng của bạn.</p>'; return; }
-    container.innerHTML = data.cases.map(item => `
-      <div class="ak-case-row">
-        <b>${esc(item.case_id)}</b> · <code>${esc(item.case_status)}</code> · KH ${esc(item.customer_id)}<br>
-        Agent đã chạy: <b>${item.agent_has_run ? "Có" : "Chưa"}</b> · Bằng chứng: <b>${item.evidence_count}</b>
-        ${item.last_ai_log_event ? `<br><small class="muted">Nhật ký AI gần nhất: ${esc(item.last_ai_log_event.event || "—")}</small>` : ""}
-      </div>
+    const rows = realCreditRows(await api("/api/v2/credit-requests"));
+    _creditRowsCache = rows;
+    const isOpen = row => row.status === "WithRM" || row.status === "PendingApproval";
+    const filtered = _creditHistoryFilter === "open" ? rows.filter(isOpen)
+      : _creditHistoryFilter === "decided" ? rows.filter(row => !isOpen(row))
+      : rows;
+    if (!filtered.length) { container.innerHTML = '<p class="muted">Không có tờ trình trong mục này.</p>'; return; }
+    container.innerHTML = filtered.map(row => `
+      <button type="button" class="credit-history-item" onclick="openCsCreditForm('${row.request_id}')">
+        <b>${esc(row.request_id)}</b> · ${esc(row.company_name)} · ${Number(row.requested_amount_vnd).toLocaleString("vi-VN")} VND
+        <span class="plain-status" style="float:right;">${esc(row.status)}</span>
+        ${creditHistoryStepsHtml(row)}
+      </button>
     `).join("");
   } catch (error) {
-    $("akActivitySummary").innerHTML = `<p class="muted">Lỗi tải hoạt động Agent: ${esc(error.message)}</p>`;
+    container.innerHTML = `<p class="muted">Lỗi tải lịch sử tờ trình: ${esc(error.message)}</p>`;
   }
 }
 
@@ -1289,6 +1519,36 @@ function bindWorkspaceEvents() {
 // Bind SSO switcher event
 $("loginForm").onsubmit = login;
 $("logoutButton").onclick = logout;
+
+// Role hint under the login role picker
+const loginRoleHints = {
+  customer: "Cổng khách hàng: gửi yêu cầu tín dụng, theo dõi tiến độ hồ sơ.",
+  staff: "Chọn nhân viên giao dịch hoặc chuyên viên thẩm định bên dưới.",
+  manager: "Manager: theo dõi workload đội, chỉ xem số liệu tổng hợp.",
+  "RM-999": "RM: tiếp nhận nhu cầu, chạy agent gợi ý và chuyển tờ trình phê duyệt.",
+  "SPEC-CREDIT-001": "Chuyên viên thẩm định: xem phân tích agent, ra quyết định tín dụng.",
+};
+function syncLoginStaffVisibility() {
+  const isStaff = $("loginRole")?.value === "staff";
+  const wrap = $("loginStaffWrap");
+  if (wrap) wrap.style.display = isStaff ? "block" : "none";
+}
+function updateLoginRoleHint() {
+  const hint = $("loginRoleHint");
+  if (!hint) return;
+  const role = $("loginRole")?.value;
+  if (role === "staff") {
+    hint.textContent = loginRoleHints[$("loginStaff")?.value] || loginRoleHints.staff;
+  } else {
+    hint.textContent = loginRoleHints[role] || "";
+  }
+}
+if ($("loginRole")) {
+  $("loginRole").onchange = () => { syncLoginStaffVisibility(); updateLoginRoleHint(); };
+  if ($("loginStaff")) $("loginStaff").onchange = updateLoginRoleHint;
+  syncLoginStaffVisibility();
+  updateLoginRoleHint();
+}
 
 // Bind Personalization preferences change
 $("togglePersonalization").onchange = updatePersonalizationSettings;

@@ -167,7 +167,7 @@ def init_employee_db() -> None:
              json.dumps(["case:create", "case:read", "case:write"]),
              json.dumps(["COMP-MP"])),
             ("RM-999", "relationship_manager", "Corporate Banking HN", 
-             json.dumps(["case:read", "case:write", "approval:request"]), 
+             json.dumps(["case:read", "case:write", "approval:request", "credit:forward"]),
              json.dumps(["COMP-ABC", "COMP-MP", "COMP-XYZ"])),
             ("SPEC-LEGAL-001", "legal_specialist", "Legal & Compliance Dept", 
              json.dumps(["case:read", "case:verify_evidence"]), 
@@ -176,13 +176,13 @@ def init_employee_db() -> None:
              json.dumps(["case:read", "product:recommend"]), 
              json.dumps(["COMP-ABC", "COMP-MP", "COMP-XYZ"])),
             ("SPEC-CREDIT-001", "credit_specialist", "Credit Risk & Underwriting", 
-             json.dumps(["case:read", "credit:analyze_file", "credit:review_structure"]), 
+             json.dumps(["case:read", "credit:analyze_file", "credit:review_structure", "credit:appraise"]),
              json.dumps(["COMP-ABC", "COMP-MP", "COMP-XYZ"])),
             ("SPEC-INSURANCE-001", "insurance_specialist", "Corporate Insurance Advisory",
              json.dumps(["case:read", "insurance:analyze_coverage", "insurance:review_coverage", "insurance:manage_knowledge"]),
              json.dumps(["COMP-ABC", "COMP-MP", "COMP-XYZ"])),
             ("MGR-HN-01", "manager", "Branch HN Management", 
-             json.dumps(["team:view_workload", "case:read"]), 
+             json.dumps(["team:view_workload", "case:read", "credit:final_approve"]),
              json.dumps(["COMP-ABC", "COMP-MP", "COMP-XYZ"]))
         ]
         cursor.executemany(
@@ -240,14 +240,14 @@ def init_employee_db() -> None:
              datetime.utcnow().isoformat(), datetime.utcnow().isoformat(),
              json.dumps([]), "relationship_manager", "COMP-MP"),
 
-            # Customer Commitment (Band P2)
-            ("TASK-103", "RM-999", "Gửi email đề xuất giải pháp chi lương", "pending",
+            # Customer Commitment (Band P2) — title cues Product Agent suggestions
+            ("TASK-103", "RM-999", "Gửi email đề xuất chi lương + thanh toán hóa đơn điện", "pending",
              0.7, 0.5, 1.0, 0.3, 0.5, 1.0, 0.2, 
              datetime.utcnow().isoformat(), datetime.utcnow().isoformat(),
              json.dumps([]), "relationship_manager", "COMP-MP"),
 
             # Normal Opportunity Work (Band P3)
-            ("TASK-104", "RM-999", "Liên hệ khách hàng cập nhật danh mục UBO", "pending",
+            ("TASK-104", "RM-999", "Giới thiệu gói cash management và vốn lưu động Minh Phát", "pending",
              0.5, 0.2, 0.0, 0.2, 0.3, 1.0, 0.5, 
              datetime.utcnow().isoformat(), datetime.utcnow().isoformat(),
              json.dumps([]), "relationship_manager", "COMP-MP"),

@@ -72,6 +72,19 @@ class SQLiteCRMAdapter(EnterpriseSQLiteBase):
                 "observed_at": datetime.now(timezone.utc).isoformat(),
             }
 
+    def list_credit_history(self, customer_id: str) -> List[Dict[str, Any]]:
+        """CIC / internal credit facilities for the Credit Agent detail view."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """SELECT record_id, customer_id, source, facility_type, lender, cic_group,
+                          original_amount_vnd, outstanding_amount_vnd, disbursed_at, maturity_at,
+                          status, max_days_past_due_12m, restructured, note, reported_at
+                   FROM credit_history WHERE customer_id = ?
+                   ORDER BY cic_group DESC, outstanding_amount_vnd DESC""",
+                (customer_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
 
 class SQLiteIAMAdapter(EnterpriseSQLiteBase):
     def get_permissions(self, employee_id: str, *, correlation_id: str) -> PermissionGrant:
@@ -174,6 +187,13 @@ def ensure_employee_copilot_demo_personas(db_path: Path | str | None = None) -> 
 def map_enterprise_role_to_role_type(role: str, organization_unit: str) -> str:
     role_lower = role.lower()
     unit_lower = organization_unit.lower()
+    canonical_roles = {
+        "customer_user", "relationship_manager", "product_specialist",
+        "legal_specialist", "credit_specialist", "insurance_specialist",
+        "manager", "auditor", "admin",
+    }
+    if role_lower in canonical_roles:
+        return role_lower
     if role_lower == "customer":
         return "customer_user"
     if role_lower == "rm":

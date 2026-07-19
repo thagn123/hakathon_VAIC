@@ -1,4 +1,4 @@
-"""Customer submit (agent #1) -> RM forward (agent #2) -> Credit Specialist final decision."""
+"""Customer form -> RM -> Credit Specialist appraisal -> Manager final decision."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from app.config import settings
 from app.credit.service import CreditReadinessService
 from app.observability.runtime import JsonEventLogger
 from app.schemas.v2.credit_request import (
+    CreditAppraisalRequest,
     CorporateCreditRequestCreate,
     CreditDecisionRequest,
     CreditForwardRequest,
@@ -33,9 +34,25 @@ def _can_view(row: Dict[str, Any], identity: VerifiedIdentity) -> bool:
     role = identity.roles[0]
     if role == RoleType.CUSTOMER_USER:
         return row["submitted_by"] == identity.employee_id
-    if role in {RoleType.RM, RoleType.CREDIT_SPECIALIST}:
+    if role in {RoleType.RM, RoleType.CREDIT_SPECIALIST, RoleType.MANAGER}:
         return row["customer_id"] in identity.customer_scope
     return False
+
+
+def _customer_view(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Customer sees submitted form + public status, never internal AI/review data."""
+    fields = {
+        "request_id", "case_id", "customer_id", "company_name", "tax_id",
+        "legal_type", "representative", "industry", "business_scale",
+        "total_assets_billion_vnd", "net_revenue_billion_vnd",
+        "net_profit_billion_vnd", "debt_to_equity_ratio",
+        "cic_debt_classification", "current_debt_billion_vnd",
+        "collateral_description", "collateral_value_billion_vnd",
+        "casa_avg_balance_billion_vnd", "repayment_history", "request_type",
+        "requested_amount_vnd", "requested_term_months", "purpose", "status",
+        "final_decision", "submitted_at", "updated_at",
+    }
+    return {key: value for key, value in row.items() if key in fields}
 
 
 def _to_create_payload(row: Dict[str, Any]) -> CorporateCreditRequestCreate:
@@ -76,22 +93,21 @@ def create_credit_request(
     if body.customer_id not in identity.customer_scope:
         raise _error(status.HTTP_403_FORBIDDEN, "CUSTOMER_SCOPE_DENIED", "Khách hàng nằm ngoài phạm vi tài khoản.")
 
-    appraisal = _appraiser.appraise_request(body)
+    service_advisory = _appraiser.recommend_services(body)
     row = _repo.create(
         body,
         submitted_by=identity.employee_id,
         idempotency_key=idempotency_key,
-        appraisal=appraisal,
+        service_advisory=service_advisory,
     )
     _events.emit(
-        "credit_request_appraised",
+        "credit_request_submitted",
         request_id=row["request_id"],
         case_id=row["case_id"],
-        actor="CreditAppraisalAgent",
-        recommendation=row["agent_recommendation"],
-        score=float(row["appraisal_score"]),
+        actor=identity.employee_id,
+        service_count=len(service_advisory["services"]),
     )
-    return row
+    return _customer_view(row)
 
 
 @router.get("", response_model=List[Dict[str, Any]])
@@ -101,11 +117,17 @@ def list_credit_requests(
     role = identity.roles[0]
     if role == RoleType.CUSTOMER_USER:
         require_capability(identity, "case:read")
-        return _repo.list_for_actor(submitted_by=identity.employee_id)
+        return [
+            _customer_view(row)
+            for row in _repo.list_for_actor(submitted_by=identity.employee_id)
+        ]
     if role == RoleType.RM:
         require_capability(identity, "case:read")
         return _repo.list_for_actor(customer_scope=identity.customer_scope)
     if role == RoleType.CREDIT_SPECIALIST:
+        require_capability(identity, "case:read")
+        return _repo.list_for_actor(customer_scope=identity.customer_scope)
+    if role == RoleType.MANAGER:
         require_capability(identity, "case:read")
         return _repo.list_for_actor(customer_scope=identity.customer_scope)
     raise _error(status.HTTP_403_FORBIDDEN, "CREDIT_REQUEST_ACCESS_DENIED", "Vai trò không được xem yêu cầu tín dụng.")
@@ -121,6 +143,8 @@ def get_credit_request(
         raise _error(status.HTTP_404_NOT_FOUND, "CREDIT_REQUEST_NOT_FOUND", "Không tìm thấy yêu cầu.")
     if not _can_view(row, identity):
         raise _error(status.HTTP_403_FORBIDDEN, "CREDIT_REQUEST_ACCESS_DENIED", "Không có quyền xem yêu cầu.")
+    if identity.roles[0] == RoleType.CUSTOMER_USER:
+        return _customer_view(row)
     return row
 
 
@@ -140,13 +164,11 @@ def forward_credit_request(
     if current["customer_id"] not in identity.customer_scope:
         raise _error(status.HTTP_403_FORBIDDEN, "CUSTOMER_SCOPE_DENIED", "Yêu cầu nằm ngoài phạm vi được giao.")
 
-    advisory = _appraiser.recommend_services(_to_create_payload(current))
     try:
         row = _repo.forward(
             request_id,
             rm_id=identity.employee_id,
             rm_note=body.rm_note,
-            service_advisory=advisory,
             idempotency_key=idempotency_key,
         )
     except CreditRequestConflict as exc:
@@ -157,7 +179,50 @@ def forward_credit_request(
         request_id=request_id,
         case_id=row["case_id"],
         actor=identity.employee_id,
-        service_count=len(advisory["services"]),
+        service_count=len(row.get("service_recommendation") or []),
+    )
+    return row
+
+
+@router.post("/{request_id}/appraisal", response_model=Dict[str, Any])
+def appraise_credit_request(
+    request_id: str,
+    body: CreditAppraisalRequest,
+    idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=128),
+    identity: VerifiedIdentity = Depends(require_verified_identity),
+) -> Dict[str, Any]:
+    if identity.roles[0] != RoleType.CREDIT_SPECIALIST:
+        raise _error(status.HTTP_403_FORBIDDEN, "CREDIT_SPECIALIST_REQUIRED", "Chỉ Credit Specialist được thẩm định.")
+    require_capability(identity, "credit:appraise")
+    current = _repo.get(request_id)
+    if not current:
+        raise _error(status.HTTP_404_NOT_FOUND, "CREDIT_REQUEST_NOT_FOUND", "Không tìm thấy yêu cầu.")
+    if current["customer_id"] not in identity.customer_scope:
+        raise _error(status.HTTP_403_FORBIDDEN, "CUSTOMER_SCOPE_DENIED", "Yêu cầu nằm ngoài phạm vi được giao.")
+
+    agent_appraisal = None
+    if body.recommendation != "needs_more_information":
+        agent_appraisal = _appraiser.appraise_request(_to_create_payload(current))
+    try:
+        row = _repo.appraise(
+            request_id,
+            expert_id=identity.employee_id,
+            specialist_recommendation=body.recommendation,
+            specialist_reason=body.reason,
+            agent_appraisal=agent_appraisal,
+            idempotency_key=idempotency_key,
+        )
+    except CreditRequestConflict as exc:
+        raise _error(status.HTTP_409_CONFLICT, "CREDIT_REQUEST_CONFLICT", str(exc)) from exc
+    _events.emit(
+        "credit_request_appraised",
+        request_id=request_id,
+        case_id=row["case_id"],
+        actor=identity.employee_id,
+        specialist_recommendation=body.recommendation,
+        agent_disbursement_recommendation=(
+            agent_appraisal["recommendation"] if agent_appraisal else None
+        ),
     )
     return row
 
@@ -169,8 +234,8 @@ def decide_credit_request(
     idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=128),
     identity: VerifiedIdentity = Depends(require_verified_identity),
 ) -> Dict[str, Any]:
-    if identity.roles[0] != RoleType.CREDIT_SPECIALIST:
-        raise _error(status.HTTP_403_FORBIDDEN, "CREDIT_SPECIALIST_REQUIRED", "Chỉ Credit Specialist được quyết định cuối.")
+    if identity.roles[0] != RoleType.MANAGER:
+        raise _error(status.HTTP_403_FORBIDDEN, "MANAGER_REQUIRED", "Chỉ Manager được phê duyệt cuối.")
     require_capability(identity, "credit:final_approve")
     current = _repo.get(request_id)
     if not current:

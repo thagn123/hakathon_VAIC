@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from app.api.v2.employee_router import require_capability, require_verified_identity
 from app.config import settings
 from app.credit.service import CreditReadinessService
+from app.integrations.enterprise import SQLiteCRMAdapter
 from app.observability.runtime import JsonEventLogger
 from app.schemas.v2.credit_request import (
     CreditAppraisalRequest,
@@ -28,6 +29,41 @@ _events = JsonEventLogger(settings.AUDIT_LOG_PATH)
 
 def _error(http_status: int, code: str, message: str) -> HTTPException:
     return HTTPException(status_code=http_status, detail={"code": code, "message": message})
+
+
+_CIC_LABELS = {
+    1: "Nhóm 1 (Nợ đủ tiêu chuẩn)",
+    2: "Nhóm 2 (Nợ cần chú ý)",
+    3: "Nhóm 3 (Nợ dưới tiêu chuẩn)",
+    4: "Nhóm 4 (Nợ nghi ngờ)",
+    5: "Nhóm 5 (Nợ có khả năng mất vốn)",
+}
+
+
+def _apply_bank_credit_records(
+    body: CorporateCreditRequestCreate,
+) -> tuple[CorporateCreditRequestCreate, Dict[str, Any]]:
+    """Bank-side CIC/repayment data overrides the customer-typed values.
+
+    The customer form keeps the fields as reference input, but when the bank
+    already has credit_history records they are the source of truth.
+    """
+    records = SQLiteCRMAdapter().list_credit_history(body.customer_id)
+    if not records:
+        return body, {}
+
+    worst_group = max(int(r["cic_group"]) for r in records)
+    max_dpd = max(int(r["max_days_past_due_12m"]) for r in records)
+    restructured = any(r["restructured"] for r in records)
+    outstanding_billion = round(
+        sum(float(r["outstanding_amount_vnd"]) for r in records) / 1_000_000_000, 2
+    )
+    overrides = {
+        "cic_debt_classification": _CIC_LABELS.get(worst_group, f"Nhóm {worst_group}"),
+        "repayment_history": "Có chậm trả" if (max_dpd > 10 or restructured) else "Hoàn hảo",
+        "current_debt_billion_vnd": outstanding_billion,
+    }
+    return body.model_copy(update=overrides), overrides
 
 
 def _can_view(row: Dict[str, Any], identity: VerifiedIdentity) -> bool:
@@ -93,6 +129,7 @@ def create_credit_request(
     if body.customer_id not in identity.customer_scope:
         raise _error(status.HTTP_403_FORBIDDEN, "CUSTOMER_SCOPE_DENIED", "Khách hàng nằm ngoài phạm vi tài khoản.")
 
+    body, bank_overrides = _apply_bank_credit_records(body)
     service_advisory = _appraiser.recommend_services(body)
     row = _repo.create(
         body,
@@ -106,6 +143,7 @@ def create_credit_request(
         case_id=row["case_id"],
         actor=identity.employee_id,
         service_count=len(service_advisory["services"]),
+        bank_overridden_fields=sorted(bank_overrides.keys()),
     )
     return _customer_view(row)
 

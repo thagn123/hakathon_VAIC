@@ -319,7 +319,7 @@ def enforce_token_identity(
                 detail={"code": "UNAUTHENTICATED", "message": "Phien dang nhap khong hop le hoac da het han."},
             )
         return
-    if not settings.DEMO_AUTH_ENABLED:
+    if settings.REQUIRE_SESSION_TOKEN or not settings.DEMO_AUTH_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "UNAUTHENTICATED", "message": "Thieu token dang nhap."},
@@ -363,7 +363,7 @@ def create_router(
     def intake_service() -> IntakeService:
         return IntakeService(repo())
 
-    router = APIRouter(prefix="/api/v2", tags=["v2"])
+    router = APIRouter(prefix="/api/v2", tags=["v2"], dependencies=[Depends(enforce_token_identity)])
 
     def assemble(employee_id: str, session_id: str, documents=(), trace_id: str | None = None) -> ContextSnapshot:
         correlation = trace_id or f"TRACE-{uuid.uuid4().hex.upper()}"

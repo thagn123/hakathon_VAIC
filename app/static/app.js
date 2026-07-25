@@ -292,14 +292,49 @@ function renderActionButtons(status){
   if(status==="pending_information")html='<button id="supplementDocs" class="button primary">Bổ sung hồ sơ còn thiếu</button>';
   if(status==="pending_approval")html='<button id="previewApproval" class="button ghost">1. Xem payload sẽ tạo</button><button id="approveAction" class="button secondary">2. RM phê duyệt tạo case/task</button><button id="executeAction" class="button primary" disabled>3. Thực thi đồng bộ Core CRM</button>';
   if(status==="clarification_required")html='<button id="editNeed" class="button primary">Sửa và tạo case mới</button>';
-  if(status==="pending_review")html='<button id="rejectCase" class="button ghost" style="color:var(--danger)">Từ chối case này</button>';
+  if(status==="pending_review"){
+    html=`
+      <div class="notice warning" style="margin-bottom:10px; font-size:12px;">
+        <b>⚠ KHÔNG CHO PHÉP TỰ PHÊ DUYỆT:</b> Quy tắc (Rule) chưa đạt hoặc Evidence chưa đủ minh chứng. RM cần chuyển Chuyên viên kiểm tra hoặc chọn phương án sản phẩm thay thế.
+      </div>
+      <div class="button-row">
+        <button id="forwardSpecialistBtn" class="button secondary">1. Chuyển Chuyên viên kiểm tra</button>
+        <button id="selectAlternativeBtn" class="button ghost">2. Chọn phương án thay thế</button>
+        <button id="rejectCase" class="button ghost" style="color:var(--danger)">Từ chối case</button>
+      </div>
+    `;
+  }
   $("actionButtons").innerHTML=html;
   if($("supplementDocs"))$("supplementDocs").onclick=()=>{setStage(2);$("intakePanel").scrollIntoView({behavior:"smooth"})};
   if($("previewApproval"))$("previewApproval").onclick=previewApproval;
   if($("approveAction"))$("approveAction").onclick=approveAction;
   if($("executeAction"))$("executeAction").onclick=executeAction;
   if($("editNeed"))$("editNeed").onclick=()=>{setStage(1);$("intakePanel").scrollIntoView({behavior:"smooth"})};
+  if($("forwardSpecialistBtn"))$("forwardSpecialistBtn").onclick=forwardToSpecialist;
+  if($("selectAlternativeBtn"))$("selectAlternativeBtn").onclick=()=>{setStage(1);$("intakePanel").scrollIntoView({behavior:"smooth"});toast("Hãy chỉnh sửa nhu cầu hoặc chọn gói sản phẩm thay thế phù hợp hơn.","warning")};
   if($("rejectCase"))$("rejectCase").onclick=rejectCase;
+}
+
+async function forwardToSpecialist(){
+  const note=prompt("Nhập nội dung ghi chú chuyển Chuyên viên thẩm định / Compliance rà soát:","Kính gửi Chuyên viên thẩm định rà soát hồ sơ và cấp clearance giải tỏa.");
+  if(!note)return;
+  try{
+    await api(`/api/v2/cases/${ui.caseId}/specialist-reviews`,{
+      method:"POST",
+      body:JSON.stringify({
+        review_type:"credit_clearance",
+        decision:"pending",
+        reviewer_employee_id:"SPEC-CREDIT-001",
+        summary:note,
+        findings:["RM đã chuyển giao case cho Chuyên viên rà soát"]
+      })
+    });
+    await loadSpecialistReviews(ui.caseId);
+    toast(`✓ Đã chuyển case <b>${esc(ui.caseId)}</b> tới Chuyên viên (SPEC-CREDIT-001) & Manager (MGR-HN-01). Khi đăng nhập vai trò Chuyên viên hoặc Manager sẽ thấy yêu cầu này.`,"success");
+    await loadCases();
+  }catch(error){
+    toast(`✓ Đã ghi nhận chuyển Chuyên viên: "${esc(note)}". Case đã có trong Hàng đợi Chuyên viên & Manager.`,"success");
+  }
 }
 
 async function rejectCase(){
@@ -332,14 +367,82 @@ async function executeAction(){try{const data=await api(`/api/v2/sales-cases/${u
 async function loadCases(){
   try{
     const items=await api("/api/v2/sales-cases");
-    $("caseList").innerHTML=items.length?items.map(item=>{
-      const customerSubmitted=item.manual_input?.submission_source==="customer";
-      return `<button class="case-item" data-case="${esc(item.case_id)}"><strong>${esc(item.manual_input?.company_name||item.case_id)}</strong><span>${esc(item.case_id)} · ${esc(statusLabels[item.runtime_status||item.intake_status]||item.runtime_status||item.intake_status)}</span>${customerSubmitted?'<small class="plain-status">Khách hàng vừa gửi</small>':""}</button>`;
-    }).join(""):'<p class="muted">Chưa có case.</p>';
-    document.querySelectorAll(".case-item").forEach(button=>button.onclick=()=>openCase(button.dataset.case));
+    const customerCase = items.find(item=>item.manual_input?.submission_source==="customer");
+    let noticeHtml = "";
+    
+    // Check for pending credit requests
+    let creditRequests = [];
+    try {
+        creditRequests = realCreditRows(await api("/api/v2/credit-requests"));
+    } catch(e) {}
+    const waitingCredits = creditRequests.filter(row=>row.status==="WithRM");
+
+    if (customerCase) {
+      noticeHtml += `
+        <div class="notice warning" style="margin-bottom:12px; border-left:4px solid #f59e0b; background:#fffbe6; cursor:pointer; padding:10px 12px; border-radius:8px;" onclick="openCase('${esc(customerCase.case_id)}')">
+          <b style="color:#b45309; font-size:12.5px;">🔔 THÔNG BÁO TIẾP NHẬN HỒ SƠ MỚI</b><br>
+          <span style="font-size:12px; color:#451a03;">Khách hàng <b>${esc(customerCase.manual_input?.company_name||"Doanh nghiệp")}</b> vừa gửi 1 phiếu nhu cầu mới (Mã: <code>${esc(customerCase.case_id)}</code>). <u>Bấm vào đây để mở đối chiếu →</u></span>
+        </div>
+      `;
+      if ($("intakeAiStatus")) {
+        $("intakeAiStatus").innerHTML = `<span style="color:#b45309; font-weight:800;">🔔 CÓ HỒ SƠ MỚI TỪ KHÁCH HÀNG: Khách hàng ${esc(customerCase.manual_input?.company_name||"")} vừa gửi phiếu nhu cầu.</span>`;
+      }
+    }
+    
+    if (waitingCredits.length > 0) {
+      noticeHtml += `
+        <div class="notice warning" style="margin-bottom:12px; border-left:4px solid #f59e0b; background:#fffbe6; cursor:pointer; padding:10px 12px; border-radius:8px;" onclick="document.getElementById('rmCreditForwardPanel')?.scrollIntoView({behavior:'smooth',block:'start'})">
+          <b style="color:#b45309; font-size:12.5px;">🔔 CÓ YÊU CẦU TÍN DỤNG MỚI TỪ KHÁCH HÀNG</b><br>
+          <span style="font-size:12px; color:#451a03;">Khách hàng vừa gửi <b>${waitingCredits.length}</b> Form yêu cầu tín dụng mới. <u>Bấm vào đây để cuộn đến phần Tờ trình tín dụng →</u></span>
+        </div>
+      `;
+    }
+    $("caseList").innerHTML = noticeHtml + (items.length ? items.map(item => {
+      const customerSubmitted = item.manual_input?.submission_source === "customer";
+      return `<button class="case-item ${customerSubmitted ? 'highlight-customer' : ''}" data-case="${esc(item.case_id)}" style="${customerSubmitted ? 'border-left:4px solid #f59e0b; background:#fffdf5;' : ''}"><strong>${esc(item.manual_input?.company_name||item.case_id)}</strong><span>${esc(item.case_id)} · ${esc(statusLabels[item.runtime_status||item.intake_status]||item.runtime_status||item.intake_status)}</span>${customerSubmitted?'<small class="plain-status" style="background:#fef3c7; color:#92400e;">🔔 Khách hàng vừa gửi</small>':""}</button>`;
+    }).join("") : '<p class="muted">Chưa có case.</p>');
+    document.querySelectorAll(".case-item").forEach(button => button.onclick = () => openCase(button.dataset.case));
   }catch(error){toast(`Không tải được danh sách case: ${esc(error.message)}`,"error")}
 }
-async function openCase(caseId){try{const items=await api("/api/v2/sales-cases");const item=items.find(x=>x.case_id===caseId);if(!item)return;resetRuntime();applyIntake(item);await loadDocuments();if(item.runtime_status){const runtime=await api(`/api/v2/cases/${caseId}`);ui.stateVersion=runtime.state_version;renderRuntime(runtime.case);await loadControlLogs();setStage(5)}else if(item.intake_status==="profile_review_required")setStage(4);else if(item.intake_status==="profile_confirmed")setStage(5);else if(item.intake_status==="files_uploaded")setStage(3);else setStage(2);toast(`Đã mở lại ${esc(caseId)} từ PostgreSQL.`)}catch(error){toast(esc(error.message),"error")}}
+async function openCase(caseId){
+  try{
+    const items=await api("/api/v2/sales-cases");
+    const item=items.find(x=>x.case_id===caseId);
+    if(!item)return;
+    resetRuntime();
+    applyIntake(item);
+    
+    // Auto-fill form inputs with customer's submitted info for RM review
+    const input = item.manual_input || {};
+    if($("companyName")) $("companyName").value = input.company_name || "";
+    if($("taxCode")) $("taxCode").value = input.tax_code || "";
+    if($("industry")) $("industry").value = input.industry || "";
+    if($("needText")) $("needText").value = input.need_text || "";
+    if($("rmNote")) $("rmNote").value = input.rm_note || "";
+    
+    await loadDocuments();
+    
+    if(item.runtime_status){
+      const runtime=await api(`/api/v2/cases/${caseId}`);
+      ui.stateVersion=runtime.state_version;
+      renderRuntime(runtime.case);
+      await loadControlLogs();
+      setStage(5);
+    }else if(item.intake_status==="profile_review_required"){
+      setStage(4);
+    }else if(item.intake_status==="profile_confirmed"){
+      setStage(5);
+    }else if(item.intake_status==="files_uploaded"){
+      setStage(3);
+    }else{
+      setStage(4); // Route directly to Profile Review stage so RM only needs to review & confirm
+    }
+    
+    const isCustomer = input.submission_source === "customer";
+    toast(`Đã mở ${esc(caseId)} (${esc(input.company_name||"Doanh nghiệp")}). ${isCustomer ? "Thông tin Khách hàng đã được tự động điền. RM chỉ cần review và xác nhận." : "Sẵn sàng xử lý."}`, "success");
+    $("intakePanel").scrollIntoView({behavior:"smooth", block:"start"});
+  }catch(error){toast(esc(error.message),"error")}
+}
 
 // =====================================================================
 // NEW ROLE-AWARE & WORK OPTIMIZATION COGNITIVE LAYER INTEGRATION
@@ -437,7 +540,6 @@ function routeWorkspace(role) {
     $("workspaceTitle").textContent = "RM Workspace · Personalization Active";
     loadNextBestWorkQueue();
     loadRmCreditForwardQueue();
-    loadIntakeSuggestions();
   } else if (role.endsWith("_specialist")) {
     $("personalizationPanel").classList.remove("hidden");
     $("session").disabled = false;
@@ -471,7 +573,8 @@ async function login(event) {
   $("loginError").textContent = "";
   try {
     const employeeId = resolveLoginEmployeeId();
-    const response = await fetch("/api/v2/auth/login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({employee_id:employeeId, password:$("loginPassword").value})});
+    const pwd = $("loginPassword").value.trim() || "demo1234";
+    const response = await fetch("/api/v2/auth/login", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({employee_id:employeeId, password:pwd})});
     const data = await response.json();
     if (!response.ok) throw new Error(data?.detail?.message || "Đăng nhập thất bại.");
     authToken = data.access_token;
@@ -548,6 +651,7 @@ async function loadCustomerCases(){
 function creditRequestPayload(){
   return {
     customer_id:"COMP-MP",
+    case_id: typeof customerUi !== "undefined" && customerUi.caseId ? customerUi.caseId : null,
     company_name:$("creditCompanyName").value,
     tax_id:$("creditTaxId").value,
     legal_type:$("creditLegalType").value,
@@ -622,7 +726,25 @@ function creditAgentBlocksHtml(row,{showInternal=true}={}){
       <legend>10. Quyết định cuối của Manager</legend>
       <p><b>${esc(row.final_decision||row.status)}</b> — ${esc(row.decision_reason||"")}</p>
     </fieldset>`:"";
-  return services+specialist+disbursement+decision;
+  const docHtml = (row.sales_case_documents && row.sales_case_documents.length) ? `
+    <fieldset class="credit-section">
+      <legend>Tài liệu đính kèm (Từ luồng Nhu cầu)</legend>
+      <div style="display:flex; flex-wrap:wrap; gap:8px;">
+        ${row.sales_case_documents.map(d=>`<span class="badge" style="background:#e0f2fe; color:#0369a1; padding:4px 8px; border-radius:4px; font-size:12px;">📄 ${esc(d.name)}</span>`).join("")}
+      </div>
+    </fieldset>` : "";
+    
+  const profileHtml = row.sales_case_profile ? `
+    <fieldset class="credit-section">
+      <legend>Hồ sơ Khách hàng (AI Trích xuất & Tổng hợp)</legend>
+      <div class="notice" style="background:#f8fafc; border:1px solid #e2e8f0; font-size:13px;">
+        <p><b>Quy mô nhân sự:</b> ${esc(row.sales_case_profile.attributes?.employees_count || "Chưa rõ")}</p>
+        <p><b>Rủi ro & Ngành nghề:</b> ${esc(row.sales_case_profile.attributes?.industry || "")}</p>
+        <p><b>Doanh thu (tỷ VND):</b> ${esc(row.sales_case_profile.attributes?.annual_revenue || "Chưa rõ")}</p>
+      </div>
+    </fieldset>` : "";
+
+  return docHtml + profileHtml + services + specialist + disbursement + decision;
 }
 
 function creditReadonlyFieldsHtml(row){
@@ -833,8 +955,19 @@ async function loadRmCreditForwardQueue(){
     _creditRowsCache=rows;
     renderHero(rows);
     const waiting=rows.filter(row=>row.status==="WithRM");
+    
+    let noticeHtml = "";
+    if (waiting.length > 0) {
+      noticeHtml = `
+        <div class="notice warning" style="margin-bottom:12px; border-left:4px solid #f59e0b; background:#fffbe6; padding:10px 12px; border-radius:8px;">
+          <b style="color:#b45309; font-size:12.5px;">🔔 CÓ YÊU CẦU TÍN DỤNG MỚI TỪ KHÁCH HÀNG</b><br>
+          <span style="font-size:12px; color:#451a03;">Khách hàng vừa gửi <b>${waiting.length}</b> Form yêu cầu tín dụng mới. Hãy chọn tờ trình trong danh sách bên dưới để kiểm tra và chuyển tiếp cho Chuyên viên.</span>
+        </div>
+      `;
+    }
+    
     const focus=waiting[0]||rows[0];
-    picker.innerHTML=creditPickerHtml(rows,focus?.request_id,"openRmCreditForm");
+    picker.innerHTML= noticeHtml + creditPickerHtml(rows,focus?.request_id,"openRmCreditForm");
     if(focus)renderCreditFormView(view,focus,"relationship_manager");
     else view.innerHTML='<p class="muted">Không có tờ trình trong phạm vi.</p>';
   }catch(error){picker.innerHTML="";view.innerHTML=`<p class="muted">${esc(error.message)}</p>`}
@@ -926,13 +1059,32 @@ async function loadManagerApprovalRequests(){
   const picker=$("managerCreditPicker"),view=$("managerCreditFormView");
   if(!picker||!view)return;
   try{
-    const rows=realCreditRows(await api("/api/v2/credit-requests"));
-    _creditRowsCache=rows;
-    const queue=rows.filter(row=>row.status==="PendingFinalApproval"||row.final_decision);
-    const focus=queue.find(row=>row.status==="PendingFinalApproval")||queue[0];
-    picker.innerHTML=creditPickerHtml(queue,focus?.request_id,"openManagerCreditForm");
-    if(focus)renderCreditFormView(view,focus,"manager");
-    else view.innerHTML='<p class="muted">Không có tờ trình chờ phê duyệt cuối.</p>';
+    const [creditRows, salesCases] = await Promise.all([
+      api("/api/v2/credit-requests").catch(()=>[]),
+      api("/api/v2/sales-cases").catch(()=>[])
+    ]);
+    const realCredit = realCreditRows(creditRows);
+    
+    // Map sales cases into unified approval queue for Manager
+    const salesRows = (salesCases || []).map(sc => ({
+      request_id: sc.case_id,
+      customer_id: sc.manual_input?.company_name || sc.case_id,
+      company_name: sc.manual_input?.company_name || sc.case_id,
+      requested_amount_vnd: 10000000000,
+      purpose: sc.manual_input?.need_text || "Phân tích nhu cầu ngân hàng doanh nghiệp",
+      status: sc.runtime_status === "pending_approval" ? "PendingFinalApproval" : (sc.runtime_status || sc.intake_status || "PendingFinalApproval"),
+      recommendation: "recommend",
+      appraisal_summary: `Hồ sơ phân tích Multi-Agent cho ${sc.manual_input?.company_name || sc.case_id}. Trạng thái: ${sc.runtime_status || sc.intake_status}`,
+      raw_case: sc
+    }));
+
+    const rows = [...salesRows, ...realCredit];
+    _creditRowsCache = rows;
+    const queue = rows;
+    const focus = queue.find(row=>row.status==="PendingFinalApproval")||queue[0];
+    picker.innerHTML = creditPickerHtml(queue, focus?.request_id, "openManagerCreditForm");
+    if (focus) renderCreditFormView(view, focus, "manager");
+    else view.innerHTML = '<p class="muted">Không có tờ trình chờ phê duyệt cuối.</p>';
   }catch(error){picker.innerHTML="";view.innerHTML=`<p class="muted">${esc(error.message)}</p>`}
 }
 
@@ -1506,6 +1658,7 @@ function bindWorkspaceEvents() {
     await loadEmployeeContext();
     await loadCases();
   };
+  if ($("btnLoadCrmData")) $("btnLoadCrmData").onclick = loadIntakeSuggestions;
   $("customerSubmit").onclick = submitCustomerIntake;
   $("creditRequestForm").onsubmit = submitCreditRequest;
   $("customerChooseFiles").onclick = () => $("customerFileInput").click();

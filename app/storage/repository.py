@@ -44,6 +44,12 @@ def _canonical(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
 
 
+def _json_dict(value: Any) -> Any:
+    if isinstance(value, str):
+        return json.loads(value)
+    return value
+
+
 class V2Repository:
     def __init__(self, db_path: str | None = None) -> None:
         # db_path is accepted for backward compatibility with callers that
@@ -55,7 +61,7 @@ class V2Repository:
         self._initialize()
 
     def _connect(self):
-        return pg.connect()
+        return pg.connect(self.db_path)
 
     def _initialize(self) -> None:
         with self._lock, self._connect() as connection:
@@ -196,7 +202,7 @@ class V2Repository:
             row = connection.execute("SELECT state_json, version FROM cases WHERE case_id=?", (case_id,)).fetchone()
         if row is None:
             return None
-        return StoredCase(state=SharedCaseState.model_validate(row["state_json"]), version=int(row["version"]))
+        return StoredCase(state=SharedCaseState.model_validate(_json_dict(row["state_json"])), version=int(row["version"]))
 
     def list_cases(self, employee_id: str) -> List[StoredCase]:
         with self._connect() as connection:
@@ -204,7 +210,7 @@ class V2Repository:
                 "SELECT state_json, version FROM cases WHERE employee_id=? ORDER BY updated_at DESC",
                 (employee_id,),
             ).fetchall()
-        return [StoredCase(SharedCaseState.model_validate(row["state_json"]), int(row["version"])) for row in rows]
+        return [StoredCase(SharedCaseState.model_validate(_json_dict(row["state_json"])), int(row["version"])) for row in rows]
 
     def list_cases_for_customers(self, customer_ids: List[str]) -> List[StoredCase]:
         """Cases belonging to any customer in customer_ids, regardless of
@@ -221,7 +227,7 @@ class V2Repository:
                 f"SELECT state_json, version FROM cases WHERE customer_id IN ({placeholders}) ORDER BY updated_at DESC",
                 tuple(customer_ids),
             ).fetchall()
-        return [StoredCase(SharedCaseState.model_validate(row["state_json"]), int(row["version"])) for row in rows]
+        return [StoredCase(SharedCaseState.model_validate(_json_dict(row["state_json"])), int(row["version"])) for row in rows]
 
     def create_intake(self, session: IntakeSession) -> StoredIntake:
         with self._lock, self._connect() as connection:
@@ -281,7 +287,7 @@ class V2Repository:
             ).fetchone()
         if row is None:
             return None
-        session = IntakeSession.model_validate(row["state_json"])
+        session = IntakeSession.model_validate(_json_dict(row["state_json"]))
         session.version = int(row["version"])
         return StoredIntake(session=session, version=int(row["version"]))
 
@@ -293,7 +299,7 @@ class V2Repository:
             ).fetchall()
         result: List[StoredIntake] = []
         for row in rows:
-            session = IntakeSession.model_validate(row["state_json"])
+            session = IntakeSession.model_validate(_json_dict(row["state_json"]))
             session.version = int(row["version"])
             result.append(StoredIntake(session=session, version=int(row["version"])))
         return result
@@ -316,7 +322,7 @@ class V2Repository:
             ).fetchall()
         result: List[StoredIntake] = []
         for row in rows:
-            session = IntakeSession.model_validate(row["state_json"])
+            session = IntakeSession.model_validate(_json_dict(row["state_json"]))
             session.version = int(row["version"])
             result.append(StoredIntake(session=session, version=int(row["version"])))
         return result

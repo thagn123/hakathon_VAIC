@@ -12,6 +12,7 @@ class CorporateCreditRequestCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     customer_id: str = Field(min_length=1, max_length=64)
+    case_id: Optional[str] = None
     company_name: str = Field(min_length=2, max_length=300)
     tax_id: str = Field(min_length=8, max_length=30)
     legal_type: str = Field(min_length=2, max_length=100)

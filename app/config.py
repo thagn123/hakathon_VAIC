@@ -87,6 +87,7 @@ class Settings(BaseModel):
     DEMO_LOGIN_PASSWORD: str = os.getenv("DEMO_LOGIN_PASSWORD", "demo1234")
     AUTH_SECRET: str = os.getenv("AUTH_SECRET", os.getenv("APPROVAL_SECRET", "demo-only-change-me"))
     AUTH_TOKEN_TTL_SECONDS: int = int(os.getenv("AUTH_TOKEN_TTL_SECONDS", str(8 * 60 * 60)))
+    REQUIRE_SESSION_TOKEN: bool = os.getenv("REQUIRE_SESSION_TOKEN", "false").lower() == "true"
 
     # Enterprise data backend. Empty => local SQLite mirrors (data/mock_database).
     # Set DATABASE_URL to a postgresql:// DSN to use the PostgreSQL

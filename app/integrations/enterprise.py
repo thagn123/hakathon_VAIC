@@ -126,17 +126,18 @@ class SQLiteSSOAdapter(EnterpriseSQLiteBase):
 
 
 _EMPLOYEE_COPILOT_DEMO_PERSONAS: list[tuple[str, str, str, list[str], dict]] = [
-    # (employee_id, coarse_role, organization_unit, permissions, access_scope)
-    # RM-999 already exists in enterprise_core.sqlite3 from the original
-    # seed; these four were only ever seeded into the newer, separate
-    # employee_db.py (data/state/v2.sqlite3) SQLite file, which meant
-    # SQLiteSSOAdapter/SQLiteIAMAdapter could never resolve them. Adding
-    # them here (idempotently) makes IAMPort/SSOPort the single place that
-    # knows about every demo employee, instead of two disconnected seed
-    # sources for the same five-person demo cast.
     ("USER-MP-001", "Customer", "Minh Phat Customer Portal",
      ["case:create", "case:read", "case:write"],
      {"managed_customer_ids": ["COMP-MP"], "branch": "CUSTOMER_PORTAL"}),
+    ("RM-999", "RM", "Corporate Banking HN",
+     ["case:read", "case:write", "approval:request", "credit:forward"],
+     {"managed_customer_ids": ["COMP-ABC", "COMP-MP", "COMP-XYZ"], "branch": "HN01"}),
+    ("RM-001", "RM", "Corporate Banking HCM",
+     ["case:read", "case:write"],
+     {"managed_customer_ids": ["COMP-XYZ"], "branch": "HCM01"}),
+    ("DATA-001", "DataSteward", "Data Governance & Stewards",
+     ["knowledge:write", "product:manage_knowledge", "legal:manage_knowledge", "credit:manage_knowledge", "insurance:manage_knowledge"],
+     {"managed_customer_ids": ["COMP-ABC", "COMP-MP", "COMP-XYZ"], "branch": "HN01"}),
     ("SPEC-LEGAL-001", "Specialist", "Legal & Compliance",
      ["case:read", "case:verify_evidence", "legal:check_issue", "legal:block_non_eligible", "legal:manage_knowledge"],
      {"managed_customer_ids": ["COMP-ABC", "COMP-MP", "COMP-XYZ"], "branch": "HN01"}),
@@ -178,6 +179,17 @@ def ensure_employee_copilot_demo_personas(db_path: Path | str | None = None) -> 
                 ON CONFLICT(employee_id) DO UPDATE SET permissions = excluded.permissions
                 """,
                 (employee_id, json.dumps(permissions), json.dumps(access_scope)),
+            )
+
+        demo_customers = [
+            ("COMP-ABC", 1, json.dumps({"company_name": "Cong ty Co phan ABC", "tax_id": "0101234567", "legal_form": "JSC", "operating_years": 5, "annual_revenue": 120.0, "employees_count": 500, "account_or_unit_count": 80, "cash_flow_status": "positive", "has_bad_debt_12m": False, "ubo_status": "verified"})),
+            ("COMP-MP", 1, json.dumps({"company_name": "Cong ty TNHH Minh Phat", "tax_id": "0109876543", "legal_form": "LLC", "operating_years": 4, "annual_revenue": 85.0, "employees_count": 45, "account_or_unit_count": 45, "cash_flow_status": "positive", "has_bad_debt_12m": False, "ubo_status": "verified"})),
+            ("COMP-XYZ", 1, json.dumps({"company_name": "Cong ty TNHH XYZ", "tax_id": "0105558888", "legal_form": "LLC", "operating_years": 2, "annual_revenue": 15.0, "employees_count": 10, "account_or_unit_count": 10, "cash_flow_status": "neutral", "has_bad_debt_12m": False, "ubo_status": "verified"})),
+        ]
+        for cid, ver, attrs in demo_customers:
+            cursor.execute(
+                "INSERT INTO customers (customer_id, profile_version, attributes) VALUES (?, ?, ?) ON CONFLICT(customer_id) DO UPDATE SET attributes = excluded.attributes",
+                (cid, ver, attrs),
             )
         conn.commit()
     finally:

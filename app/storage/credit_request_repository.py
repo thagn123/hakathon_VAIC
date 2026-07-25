@@ -33,8 +33,11 @@ class CreditRequestRepository:
                 return dict(existing)
 
             request_id = f"CR-{uuid.uuid4().hex[:12].upper()}"
-            case_id = f"CASE-{uuid.uuid4().hex[:12].upper()}"
-            values = request.model_dump(mode="python")
+            case_id = request.case_id or f"CASE-{uuid.uuid4().hex[:12].upper()}"
+            
+            from decimal import Decimal
+            values = {k: float(v) if isinstance(v, Decimal) else v for k, v in request.model_dump(mode="python").items()}
+            
             row = connection.execute(
                 """
                 INSERT INTO corporate_credit_requests (
@@ -88,18 +91,19 @@ class CreditRequestRepository:
                     (submitted_by,),
                 ).fetchall()
             elif customer_scope:
+                placeholders = ",".join("?" for _ in customer_scope)
                 if status:
                     rows = connection.execute(
-                        """SELECT * FROM corporate_credit_requests
-                           WHERE customer_id = ANY(?) AND status = ?
+                        f"""SELECT * FROM corporate_credit_requests
+                           WHERE customer_id IN ({placeholders}) AND status = ?
                            ORDER BY submitted_at DESC""",
-                        (list(customer_scope), status),
+                        (*customer_scope, status),
                     ).fetchall()
                 else:
                     rows = connection.execute(
-                        """SELECT * FROM corporate_credit_requests
-                           WHERE customer_id = ANY(?) ORDER BY submitted_at DESC""",
-                        (list(customer_scope),),
+                        f"""SELECT * FROM corporate_credit_requests
+                           WHERE customer_id IN ({placeholders}) ORDER BY submitted_at DESC""",
+                        tuple(customer_scope),
                     ).fetchall()
             else:
                 rows = []

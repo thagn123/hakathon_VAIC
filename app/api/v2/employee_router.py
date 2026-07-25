@@ -351,7 +351,10 @@ def get_my_context(identity: VerifiedIdentity = Depends(require_verified_identit
             work_ctx.active_case_id = case_row["case_id"]
         cursor.execute("SELECT item_id FROM employee_work_items WHERE employee_id = ? AND status != 'completed'", (emp_id,))
         work_ctx.pending_task_ids = [r["item_id"] for r in cursor.fetchall()]
-        cursor.execute("SELECT case_id FROM cases WHERE state_json->>'status' = 'blocked'")
+        if settings.DATABASE_URL:
+            cursor.execute("SELECT case_id FROM cases WHERE state_json->>'status' = 'blocked'")
+        else:
+            cursor.execute("SELECT case_id FROM cases WHERE json_extract(state_json, '$.status') = 'blocked'")
         work_ctx.blocked_case_ids = [r["case_id"] for r in cursor.fetchall()]
         # Which specialist subtype(s) this employee's own pending_review
         # cases are actually waiting on -- derived from the SAME
@@ -359,13 +362,21 @@ def get_my_context(identity: VerifiedIdentity = Depends(require_verified_identit
         # endpoint (case_action_router) uses to decide who may clear them,
         # not a hardcoded "always legal_specialist" guess (see
         # docs/EMPLOYEE_ROLE_DESIGN_EVALUATION_REPORT.md §9).
-        cursor.execute(
-            "SELECT state_json FROM cases WHERE employee_id = ? AND state_json->>'status' = 'pending_review'",
-            (emp_id,),
-        )
+        if settings.DATABASE_URL:
+            cursor.execute(
+                "SELECT state_json FROM cases WHERE employee_id = ? AND state_json->>'status' = 'pending_review'",
+                (emp_id,),
+            )
+        else:
+            cursor.execute(
+                "SELECT state_json FROM cases WHERE employee_id = ? AND json_extract(state_json, '$.status') = 'pending_review'",
+                (emp_id,),
+            )
         waiting_roles: set[str] = set()
         for r in cursor.fetchall():
-            state = r["state_json"]  # JSONB -> already a dict
+            state = r["state_json"]
+            if isinstance(state, str):
+                state = json.loads(state)
             risk_result = (state.get("risk_gate_result") if isinstance(state, dict) else {}) or {}
             waiting_roles.update(risk_result.get("required_reviewer_roles") or ["legal_specialist"])
         work_ctx.waiting_for_roles = sorted(waiting_roles)

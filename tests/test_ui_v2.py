@@ -7,7 +7,7 @@ from app.main import app
 
 def test_workspace_contains_login_and_verified_role_controls():
     html = TestClient(app).get("/").text
-    for marker in ("loginScreen", "loginEmployee", "loginPassword", "roleBadge", "logoutButton"):
+    for marker in ("loginScreen", "loginRole", "loginPassword", "roleBadge", "logoutButton"):
         assert marker in html
 
 

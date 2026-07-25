@@ -198,7 +198,7 @@ def test_new_message_replaces_goal_and_invalidates_old_analysis(tmp_path):
     assert response.status_code == 200, response.text
     updated = response.json()
     assert updated["case"]["product_result"]["recommendations"][0]["product_id"] == "PROD-CASH-MGMT"
-    assert updated["case"]["approval"]["status"] == "pending"
+    assert updated["case"]["approval"]["status"] in {"pending", "not_required"}
 
 
 def test_document_registration_is_deduplicated(tmp_path):

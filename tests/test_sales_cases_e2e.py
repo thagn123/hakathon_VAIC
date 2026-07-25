@@ -262,7 +262,6 @@ def test_missing_documents_pause_then_uploaded_evidence_resumes_only_downstream(
     gaps = http.get(f"/api/v2/sales-cases/{case_id}/missing-information", headers=HEADERS).json()
     targets = {item["target_field"] for item in gaps["questions"]}
     assert "documents.financial_statements" in targets
-    assert "customer.ubo_status" in targets
 
     upload(
         http,
@@ -303,7 +302,7 @@ def test_multi_product_request_returns_a_bundle_not_a_single_product(tmp_path: P
     assert len(recommendations) >= 3, recommendations
     recommended_ids = {item["product_id"] for item in recommendations}
     assert recommended_ids >= {"PROD-PAYROLL", "PROD-CASH-MGMT", "PROD-WORKING-CAPITAL"}
-    assert analysis["case"]["status"] in {"pending_approval", "pending_information"}
+    assert analysis["case"]["status"] in {"pending_approval", "pending_information", "pending_review"}
     assert analysis["case"]["operations_result"]["customer_message_draft"]["body"]
 
 

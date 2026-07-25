@@ -330,7 +330,7 @@
         </label>
         <small id="loginRoleHint" class="login-role-hint"></small>
         <label class="login-field">Mật khẩu
-          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••">
+          <input id="loginPassword" type="password" value="demo1234" autocomplete="current-password" placeholder="demo1234">
         </label>
         <button class="button primary login-submit" type="submit">Đăng nhập →</button>
         <p id="loginError" class="login-error"></p>
@@ -471,18 +471,19 @@
 
             <div id="stageInput" class="stage">
               <div class="ai-copilot-bar">
-                <div><b>Dữ liệu khách hàng từ database</b><small id="intakeAiStatus">Đang tải CRM context theo quyền truy cập...</small></div>
+                <div><b>Dữ liệu khách hàng từ CRM database</b><small id="intakeAiStatus">Nhập thông tin bên dưới hoặc bấm nút để nạp dữ liệu CRM mẫu.</small></div>
+                <button type="button" id="btnLoadCrmData" class="button secondary" style="padding:5px 11px; font-size:11.5px; white-space:nowrap;">Nạp dữ liệu CRM & Gợi ý AI</button>
               </div>
               <div class="form-grid">
-                <label class="field span-2">Doanh nghiệp<input id="companyName" autocomplete="organization" required></label>
-                <label class="field">Mã số thuế<input id="taxCode" required></label>
-                <label class="field">Ngành<input id="industry" required></label>
-                <label class="field span-2">Nhu cầu khách hàng<textarea id="needText" rows="5" placeholder="RM nhập nhu cầu thực tế của khách hàng"></textarea></label>
+                <label class="field span-2">Doanh nghiệp<input id="companyName" autocomplete="organization" placeholder="Nhập tên doanh nghiệp..." required></label>
+                <label class="field">Mã số thuế<input id="taxCode" placeholder="Nhập mã số thuế..." required></label>
+                <label class="field">Ngành<input id="industry" placeholder="Nhập ngành nghề..." required></label>
+                <label class="field span-2">Nhu cầu khách hàng<textarea id="needText" rows="5" placeholder="RM nhập nhu cầu thực tế của khách hàng..."></textarea></label>
                 <label class="field span-2">Ghi chú của RM<textarea id="rmNote" rows="2" placeholder="Thông tin bổ sung từ cuộc trao đổi"></textarea></label>
               </div>
               <div class="agent-result-grid">
-                <section class="agent-result"><b>Agent sản phẩm · Gợi ý cho RM</b><div id="productAdviceList"><p class="muted">Đang đối chiếu danh mục sản phẩm...</p></div></section>
-                <section class="agent-result"><b>Credit Agent · Xác minh tín dụng</b><div id="creditAssessment"><p class="muted">Đang kiểm tra dữ liệu tín dụng hiện có...</p></div></section>
+                <section class="agent-result"><b>Agent sản phẩm · Gợi ý cho RM</b><div id="productAdviceList"><p class="muted">Nhập thông tin doanh nghiệp & nhu cầu để Agent gợi ý sản phẩm phù hợp...</p></div></section>
+                <section class="agent-result"><b>Credit Agent · Xác minh tín dụng</b><div id="creditAssessment"><p class="muted">Nhập nhu cầu khách hàng để Credit Agent đối chiếu dữ liệu tín dụng...</p></div></section>
               </div>
               <div class="button-row"><button id="createCase" class="button primary">Tạo hồ sơ →</button></div>
             </div>

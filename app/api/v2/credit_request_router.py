@@ -148,6 +148,36 @@ def create_credit_request(
     return _customer_view(row)
 
 
+def _enrich_with_sales_case(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    from app.storage.repository import repo
+    from app.api.v2.intake_service import intake_service
+    repository = repo()
+    service = intake_service()
+    
+    enriched = []
+    for row in rows:
+        case_id = row.get("case_id")
+        documents = []
+        ai_profile = None
+        if case_id:
+            with repository._connect() as conn:
+                intake_row = conn.execute("SELECT intake_id FROM intake_sessions WHERE case_id=?", (case_id,)).fetchone()
+            if intake_row:
+                intake_id = intake_row["intake_id"]
+                docs = repository.list_intake_documents(intake_id)
+                documents = [service.public_document(d) for d in docs]
+            
+            stored = repository.get_case(case_id)
+            if stored and stored.state and stored.state.customer:
+                ai_profile = stored.state.customer.model_dump(mode="json")
+                
+        row_copy = dict(row)
+        row_copy["sales_case_documents"] = documents
+        row_copy["sales_case_profile"] = ai_profile
+        enriched.append(row_copy)
+    return enriched
+
+
 @router.get("", response_model=List[Dict[str, Any]])
 def list_credit_requests(
     identity: VerifiedIdentity = Depends(require_verified_identity),
@@ -159,16 +189,21 @@ def list_credit_requests(
             _customer_view(row)
             for row in _repo.list_for_actor(submitted_by=identity.employee_id)
         ]
+    
+    rows = []
     if role == RoleType.RM:
         require_capability(identity, "case:read")
-        return _repo.list_for_actor(customer_scope=identity.customer_scope)
-    if role == RoleType.CREDIT_SPECIALIST:
+        rows = _repo.list_for_actor(customer_scope=identity.customer_scope)
+    elif role == RoleType.CREDIT_SPECIALIST:
         require_capability(identity, "case:read")
-        return _repo.list_for_actor(customer_scope=identity.customer_scope)
-    if role == RoleType.MANAGER:
+        rows = _repo.list_for_actor(customer_scope=identity.customer_scope)
+    elif role == RoleType.MANAGER:
         require_capability(identity, "case:read")
-        return _repo.list_for_actor(customer_scope=identity.customer_scope)
-    raise _error(status.HTTP_403_FORBIDDEN, "CREDIT_REQUEST_ACCESS_DENIED", "Vai trò không được xem yêu cầu tín dụng.")
+        rows = _repo.list_for_actor(customer_scope=identity.customer_scope)
+    else:
+        raise _error(status.HTTP_403_FORBIDDEN, "CREDIT_REQUEST_ACCESS_DENIED", "Vai trò không được xem yêu cầu tín dụng.")
+        
+    return _enrich_with_sales_case(rows)
 
 
 @router.get("/{request_id}", response_model=Dict[str, Any])
@@ -183,7 +218,7 @@ def get_credit_request(
         raise _error(status.HTTP_403_FORBIDDEN, "CREDIT_REQUEST_ACCESS_DENIED", "Không có quyền xem yêu cầu.")
     if identity.roles[0] == RoleType.CUSTOMER_USER:
         return _customer_view(row)
-    return row
+    return _enrich_with_sales_case([row])[0]
 
 
 @router.post("/{request_id}/forward", response_model=Dict[str, Any])

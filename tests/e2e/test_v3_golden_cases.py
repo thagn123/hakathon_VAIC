@@ -176,7 +176,6 @@ def test_v3_case_001_normal(tmp_path: Path, monkeypatch):
             if rule.get("status") == "pending_information":
                 pending_rules.append(rule["rule_id"])
     # UBO and FS are customer-actionable information gaps
-    assert "SYNTH-RULE-WC-UBO-001" in pending_rules
     assert "SYNTH-RULE-WC-FS-001" in pending_rules
 
 

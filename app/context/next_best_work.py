@@ -241,6 +241,44 @@ def get_next_best_work(
 
     # Convert to NextBestWorkItem schemas
     results = []
+    
+    # 1. Prepend dynamic live cases created by RM/specialist
+    try:
+        from app.storage.repository import V2Repository
+        repo = V2Repository()
+        live_cases = repo.list_cases()
+        for stored in live_cases:
+            state = stored.state
+            c_id = state.context.customer.customer_id if state.context and state.context.customer else "COMP-MP"
+            if customer_scope and c_id not in customer_scope and "*" not in customer_scope:
+                continue
+            if state.status.value in {"completed", "rejected"}:
+                continue
+            sub_src = (state.manual_input or {}).get("submission_source", "staff")
+            is_customer_sub = sub_src == "customer"
+            title_prefix = "🔔 Hồ sơ KHÁCH HÀNG VỪA GỬI: " if is_customer_sub else "Xử lý hồ sơ phân tích live: "
+            p_score = 98.0 if is_customer_sub else 95.0
+            
+            reasons_list = [
+                "Khách hàng vừa nộp nhu cầu trực tiếp từ Cổng Khách Hàng" if is_customer_sub else "Hồ sơ vừa tạo từ nhu cầu thực tế của khách hàng",
+                f"Trạng thái hiện tại: {status_str}",
+                "RM cần đối chiếu dữ liệu trước khi xác nhận context" if is_customer_sub else "Kết quả phân tích Multi-Agent sống sau mỗi lần run-analysis"
+            ]
+            
+            results.append(NextBestWorkItem(
+                work_item_id=state.case_id,
+                title=f"{title_prefix}{comp_name} ({state.case_id})",
+                customer_id=c_id,
+                priority_score=p_score,
+                priority="high",
+                reasons=reasons_list,
+                excluded_actions=[],
+                recommended_action="resume_case_analysis",
+                agent_suggestions=suggs[:4]
+            ))
+    except Exception:
+        pass
+
     for item in ranked_items:
         results.append(NextBestWorkItem(
             work_item_id=item["item_id"],

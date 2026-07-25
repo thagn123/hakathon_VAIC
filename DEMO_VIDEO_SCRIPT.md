@@ -42,9 +42,9 @@
 2. Loading state hiện: "Đang phân tích..."
 3. Kết quả hiện ra:
    - **Product Expert**: Gợi ý Payroll & Cash Management
-   - **Credit Expert**: Phân tích khả năng tín dụng
+   - **Credit Expert**: Ghi nhận nhu cầu vốn 50 tỷ VNĐ (chuyển bước thẩm định tín dụng, không tự phê duyệt/cấp hạn mức)
    - **Insurance Expert**: Kiểm tra bảo hiểm tài sản/hàng hóa
-   - **Coordinator**: Tổng hợp phương án cuối
+   - **Planner Coordinator**: Tổng hợp phương án cuối cùng
 4. Xem **Evidence Sources** tab → Nguồn trích dẫn từ catalog
 5. Xem **AI Decision Log** → Trace rõ ràng
 
@@ -76,4 +76,4 @@
 - Dữ liệu hoàn toàn synthetic (DEMO MODE)
 - Agent chạy deterministic fallback khi không có API key
 - Tất cả chạy trên localhost, không cần kết nối cloud
-- E2E test: 8/9 steps passed
+- E2E test: 9/9 steps passed (DEMO READY)

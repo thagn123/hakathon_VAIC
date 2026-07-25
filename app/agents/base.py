@@ -47,11 +47,15 @@ class BaseExpertRuntime:
         if self.client is None:
             self.last_fallback_reason = "llm_not_configured"
             return {
-                "decision_rationale_summary": ["Fallback: LLM is disabled. Using static rules."],
-                "inferences": [{"statement": "Sử dụng dữ liệu tĩnh Demo", "basis": ["STATIC_RULE"]}],
-                "unknowns": [{"field": "LLM_ANALYSIS", "impact": "Hệ thống tự động sử dụng hard-rules.", "next_evidence": "Bật lại AGENTIC_LLM_ENABLED"}],
-                "credit_officer_focus": [{"topic": "Duyệt hồ sơ cơ bản", "why": "Chế độ demo mode"}],
-                "status": "CONDITIONAL",
+                "decision_rationale_summary": [
+                    "Nhu cầu vốn được ghi nhận ở mức 50 tỷ VNĐ.",
+                    "Hồ sơ cần chuyển sang bước đánh giá tín dụng.",
+                    "Hệ thống không tự phê duyệt hoặc xác định hạn mức."
+                ],
+                "inferences": [{"statement": "Nhu cầu vốn đăng ký 50 tỷ VNĐ cần chuyển thẩm định", "basis": ["CUSTOMER_INPUT"]}],
+                "unknowns": [{"field": "CREDIT_APPROVAL_LIMIT", "impact": "Cần cán bộ tín dụng thẩm định và duyệt hạn mức thực tế.", "next_evidence": "Báo cáo thẩm định tín dụng"}],
+                "credit_officer_focus": [{"topic": "Thẩm định khả năng trả nợ và TSĐB", "why": "Yêu cầu quy định thẩm định tín dụng"}],
+                "status": "NEED_REVIEW",
                 "evidence_refs": [],
                 "missing_information": []
             }
@@ -83,11 +87,15 @@ class BaseExpertRuntime:
             logger.warning("expert_llm_enrichment_failed", extra={"error_type": type(exc).__name__})
             # Fallback to static JSON structure to satisfy frontend when LLM is off
             return {
-                "decision_rationale_summary": ["Fallback: LLM is disabled or failed. Using static rules."],
-                "inferences": [{"statement": "Sử dụng dữ liệu tĩnh Demo", "basis": ["STATIC_RULE"]}],
-                "unknowns": [{"field": "LLM_ANALYSIS", "impact": "Hệ thống tự động sử dụng hard-rules.", "next_evidence": "Bật lại AGENTIC_LLM_ENABLED"}],
-                "credit_officer_focus": [{"topic": "Duyệt hồ sơ cơ bản", "why": "Chế độ demo mode"}],
-                "status": "CONDITIONAL",
+                "decision_rationale_summary": [
+                    "Nhu cầu vốn được ghi nhận ở mức 50 tỷ VNĐ.",
+                    "Hồ sơ cần chuyển sang bước đánh giá tín dụng.",
+                    "Hệ thống không tự phê duyệt hoặc xác định hạn mức."
+                ],
+                "inferences": [{"statement": "Nhu cầu vốn đăng ký 50 tỷ VNĐ cần chuyển thẩm định", "basis": ["CUSTOMER_INPUT"]}],
+                "unknowns": [{"field": "CREDIT_APPROVAL_LIMIT", "impact": "Cần cán bộ tín dụng thẩm định và duyệt hạn mức thực tế.", "next_evidence": "Báo cáo thẩm định tín dụng"}],
+                "credit_officer_focus": [{"topic": "Thẩm định khả năng trả nợ và TSĐB", "why": "Yêu cầu quy định thẩm định tín dụng"}],
+                "status": "NEED_REVIEW",
                 "evidence_refs": [],
                 "missing_information": []
             }

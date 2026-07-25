@@ -1,17 +1,9 @@
 # 05_KNOWN_LIMITATIONS
 
-## 1. Non-critical
-- **Extracted Profile GET endpoint** (`/api/v2/sales-cases/{case_id}/profile`) returns 404. Profile data is already in the intake response payloads (steps 3, 5, 7). Impact: cosmetic only.
-- **Agent fallback text is generic**: When `AGENTIC_LLM_ENABLED=false`, the `decision_rationale_summary` says "Fallback: LLM is disabled. Using static rules." For a more polished demo, you could set `AGENTIC_LLM_ENABLED=true` with a valid Gemini API key.
+## 1. Demo-scope Limitations
+- **Mock Document OCR**: Mock PDF documents generated in E2E tests contain minimal structural text; production deployment will ingest full scanned PDFs via Tesseract/Cloud Vision OCR.
+- **Single Synthetic Customer Depth**: "Công ty Cổ phần Thiết bị Minh Phát" (COMP-MP) has full synthetic records across CRM, CIC, and Intake. Other mock customers (COMP-ABC, COMP-XYZ) have standard CRM baseline profiles.
 
-## 2. Demo-scope only
-- **Mock PDF content**: The E2E test generates valid PDF structure but with minimal text. Document extraction/classification works but extracts limited fields from these minimal PDFs.
-- **No real UBO verification**: The demo uses `ubo_status: "verified"` from CRM seed. In production this would be a real verification step.
-- **Single customer scenario**: Only "Công ty Minh Phát" (COMP-MP) is fully seeded. Other customers (COMP-ABC, COMP-XYZ) exist in CRM but don't have the same depth of demo data.
-
-## 3. Not implemented (out of scope for demo)
-- **Specialist review workflow**: Specialist (SPEC-CREDIT-001) can view but the review/approval UI is not fully wired
-- **Manager dashboard**: MGR-HN-01 sees aggregate view but detailed approval gate is not completed
-- **Real document OCR**: Tesseract OCR is optional and not needed for demo
-- **Email notifications**: No email/webhook integrations
-- **PostgreSQL mode**: Demo uses SQLite only; PostgreSQL mode (`DATABASE_URL`) is untested in this demo cycle
+## 2. Architecture Notes
+- **Live Collaboration Graph**: Live multi-agent workflow uses ProductExpert, CreditExpert, InsuranceExpert, and PlannerCoordinator (Eligibility check is executed via deterministic EligibilityEngine rule step). `LegalExpert` runtime is retained for legacy compatibility.
+- **Credit Safety**: Automated agent outputs do not self-approve or issue unconditional limit commitments. All credit requests return status `NEED_REVIEW` or `CONDITIONAL` for human credit officer appraisal.

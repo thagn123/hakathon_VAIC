@@ -144,7 +144,7 @@ def main():
 
     # 6. Get extracted profile
     safe_call("6. Extracted Profile", s.get,
-              f"{BASE}/api/v2/sales-cases/{case_id}/profile",
+              f"{BASE}/api/v2/sales-cases/{case_id}/extracted-profile",
               headers=json_headers)
 
     # 7. Confirm profile

@@ -14,10 +14,10 @@ if (!(Test-Path $envFile)) {
     Write-Host "Using existing .env"
 }
 
+$py = ".\.venv\Scripts\python.exe"
+
 Write-Host "Resetting local Demo database state..." -ForegroundColor Yellow
-# We can just start the server, the frontend will reset via /api/v2/demo/reset when "Reset" is clicked, 
-# but if we want to reset via script we can run a python command.
-python -c "import sqlite3; conn = sqlite3.connect('data/mock_database/enterprise_core.sqlite3'); conn.execute('DELETE FROM corporate_credit_requests'); conn.execute('DELETE FROM intake_sessions'); conn.execute('DELETE FROM cases'); conn.execute('DELETE FROM documents'); conn.commit(); print('Demo DB Reset.')"
+& $py -c "import sqlite3; conn = sqlite3.connect('shb_corporate.db'); [conn.execute(f'DROP TABLE IF EXISTS {t}') for t in ('intake_documents', 'intake_processing_jobs', 'intake_sessions', 'cases', 'audit_events')]; conn.commit(); print('Demo DB Reset.')"
 
 Write-Host "Starting FastAPI Server on http://localhost:8000" -ForegroundColor Green
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+& $py -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload

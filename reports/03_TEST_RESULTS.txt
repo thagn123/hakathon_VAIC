@@ -1,0 +1,378 @@
+
+============================================================
+  ✅ 1. Health Check
+============================================================
+{
+  "status": "ok",
+  "version": "2.0.0",
+  "mode": "demo"
+}
+
+============================================================
+  ✅ 2. Login as RM-999
+============================================================
+{
+  "access_token": "shb.eyJzdWIiOiJSTS05OTkiLCJpYXQiOjE3ODQ5NjUxODAsImV4cCI6MTc4NDk5Mzk4MCwianRpIjoiSThWeEx1RDJqbDJNV2s2dSJ9.jBFHjBHyJhHSVA_xOxP9iMbruulHUDMNsPDIqAO-zYc",
+  "token_type": "Bearer",
+  "expires_in": 28800,
+  "employee_id": "RM-999"
+}
+
+============================================================
+  ✅ 3. Create Sales Case
+============================================================
+{
+  "case_id": "CASE-75B37E763209",
+  "conflicts": [],
+  "customer_id": "COMP-MP",
+  "intake_id": "INTAKE-2AA62902D303",
+  "intake_status": "draft",
+  "manual_input": {
+    "annual_revenue": 120000000000.0,
+    "company_name": "Công ty Cổ phần Thiết bị Minh Phát",
+    "contact": "Nguyễn Minh Anh · 0901 234 567",
+    "current_products": [],
+    "employees_count": 500,
+    "industry": "Phân phối thiết bị công nghiệp",
+    "need_text": "Cần mở rộng kho bãi và hệ thống quản lý dòng tiền tự động cho 3 chi nhánh mới.",
+    "operating_years": 8,
+    "preferred_timeline": "Triển khai trong tháng này",
+    "priority": "normal",
+    "requested_amount_vnd": 50000000000.0,
+    "rm_note": "Demo data — RM-999",
+    "submission_source": "rm",
+    "tax_code": "0109988665"
+  },
+  "next_step": "upload_documents",
+  "profile": {
+    "business_profile": {
+      "account_or_unit_count": 45,
+      "annual_revenue": 120000000000.0,
+      "employees_count": 500,
+      "operating_years": 8
+    },
+    "cash_flow_profile": {
+      "current_status": "positive"
+    },
+    "collection_profile": {},
+    "company_identity": {
+      "industry": "Phân phối thiết bị công nghiệp",
+      "name": "Công ty Cổ phần Thiết bị Minh Phát",
+      "tax_code": "0109988665"
+    },
+    "confidence_summary": {
+      "business_profile.account_or_unit_count": 0.9,
+      "business_profile.annual_revenue": 1.0,
+      "business_profile.employees_count": 1.0,
+      "business_profile.operating_years": 1.0,
+      "cash_flow_profile.current_status": 0.85,
+      "company_identity.industry": 1.0,
+      "company_identity.name": 1.0,
+      "company_identity.tax_code": 1.0,
+      "explicit_needs": 1.0,
+      "financing_profile.has_bad_debt_12m": 0.9,
+      "financing_profile.requested_amount_vnd": 1.0,
+      "legal_profile.ubo_status": 0.85,
+      "operating_model.preferred_timeline": 1.0
+    },
+    "confirmed_at": null,
+    "confirmed_by": null,
+    "created_at": "2026-07-25T07:39:40.394080Z",
+    "existing_bank_products": [],
+
+
+============================================================
+  ✅ 4. Upload Documents
+============================================================
+{
+  "case_id": "CASE-75B37E763209",
+  "intake_id": "INTAKE-2AA62902D303",
+  "intake_status": "files_uploaded",
+  "version": 4,
+  "customer_id": "COMP-MP",
+  "manual_input": {
+    "company_name": "Công ty Cổ phần Thiết bị Minh Phát",
+    "tax_code": "0109988665",
+    "industry": "Phân phối thiết bị công nghiệp",
+    "contact": "Nguyễn Minh Anh · 0901 234 567",
+    "employees_count": 500,
+    "annual_revenue": 120000000000.0,
+    "operating_years": 8,
+    "requested_amount_vnd": 50000000000.0,
+    "preferred_timeline": "Triển khai trong tháng này",
+    "need_text": "Cần mở rộng kho bãi và hệ thống quản lý dòng tiền tự động cho 3 chi nhánh mới.",
+    "rm_note": "Demo data — RM-999",
+    "priority": "normal",
+    "current_products": [],
+    "submission_source": "rm"
+  },
+  "profile": {
+    "snapshot_id": "SNAP-AC631F9FE890",
+    "schema_version": "1.0.0",
+    "revision": 1,
+    "snapshot_hash": "sha256:18bcd757e9b9dcef07e0e9f838a9b32eb929f954424530ecb5bc264b810b464b",
+    "company_identity": {
+      "name": "Công ty Cổ phần Thiết bị Minh Phát",
+      "tax_code": "0109988665",
+      "industry": "Phân phối thiết bị công nghiệp"
+    },
+    "business_profile": {
+      "employees_count": 500,
+      "annual_revenue": 120000000000.0,
+      "operating_years": 8,
+      "account_or_unit_count": 45
+    },
+    "operating_model": {
+      "preferred_timeline": "Triển khai trong tháng này"
+    },
+    "transaction_profile": {},
+    "collection_profile": {},
+    "payment_profile": {},
+    "payroll_profile": {},
+    "cash_flow_profile": {
+      "current_status": "positive"
+    },
+    "technology_profile": {},
+    "financing_profile": {
+      "requested_amount_vnd": 50000000000.0,
+      "has_bad_debt_12m": false
+    },
+    "legal_profile": {
+      "ubo_status": "verified"
+    },
+    "existing_bank_products": [],
+    "explicit_needs": [
+      "cash_management"
+    ],
+    "inferred_candidate_needs": [],
+    "pain_points": [],
+    "missing_information": [],
+    "source_map": {
+      "company
+
+============================================================
+  ✅ 5. Process Documents
+============================================================
+{
+  "case_id": "CASE-75B37E763209",
+  "intake_id": "INTAKE-2AA62902D303",
+  "intake_status": "profile_review_required",
+  "version": 5,
+  "customer_id": "COMP-MP",
+  "manual_input": {
+    "company_name": "Công ty Cổ phần Thiết bị Minh Phát",
+    "tax_code": "0109988665",
+    "industry": "Phân phối thiết bị công nghiệp",
+    "contact": "Nguyễn Minh Anh · 0901 234 567",
+    "employees_count": 500,
+    "annual_revenue": 120000000000.0,
+    "operating_years": 8,
+    "requested_amount_vnd": 50000000000.0,
+    "preferred_timeline": "Triển khai trong tháng này",
+    "need_text": "Cần mở rộng kho bãi và hệ thống quản lý dòng tiền tự động cho 3 chi nhánh mới.",
+    "rm_note": "Demo data — RM-999",
+    "priority": "normal",
+    "current_products": [],
+    "submission_source": "rm"
+  },
+  "profile": {
+    "snapshot_id": "SNAP-E68187CA93D0",
+    "schema_version": "1.0.0",
+    "revision": 2,
+    "snapshot_hash": "sha256:ac81675273e06cc71d7538120fabb9c26523e5323d6801e4bc5947182547ce5a",
+    "company_identity": {
+      "name": "Công ty Cổ phần Thiết bị Minh Phát",
+      "tax_code": "0109988665",
+      "industry": "Phân phối thiết bị công nghiệp"
+    },
+    "business_profile": {
+      "employees_count": 500,
+      "annual_revenue": 120000000000.0,
+      "operating_years": 8,
+      "account_or_unit_count": 45
+    },
+    "operating_model": {
+      "preferred_timeline": "Triển khai trong tháng này"
+    },
+    "transaction_profile": {},
+    "collection_profile": {},
+    "payment_profile": {},
+    "payroll_profile": {},
+    "cash_flow_profile": {
+      "current_status": "positive"
+    },
+    "technology_profile": {},
+    "financing_profile": {
+      "requested_amount_vnd": 50000000000.0,
+      "has_bad_debt_12m": false
+    },
+    "legal_profile": {
+      "ubo_status": "verified"
+    },
+    "existing_bank_products": [],
+    "explicit_needs": [
+      "cash_management"
+    ],
+    "inferred_candidate_needs": [],
+    "pain_points": [],
+    "missing_information": [],
+    "source_map": {
+     
+
+============================================================
+  ⚠️ 6. Extracted Profile (HTTP 404)
+============================================================
+{
+  "detail": "Not Found"
+}
+
+============================================================
+  ✅ 7. Confirm Profile
+============================================================
+{
+  "case_id": "CASE-75B37E763209",
+  "intake_id": "INTAKE-2AA62902D303",
+  "intake_status": "profile_confirmed",
+  "version": 6,
+  "customer_id": "COMP-MP",
+  "manual_input": {
+    "company_name": "Công ty Cổ phần Thiết bị Minh Phát",
+    "tax_code": "0109988665",
+    "industry": "Phân phối thiết bị công nghiệp",
+    "contact": "Nguyễn Minh Anh · 0901 234 567",
+    "employees_count": 500,
+    "annual_revenue": 120000000000.0,
+    "operating_years": 8,
+    "requested_amount_vnd": 50000000000.0,
+    "preferred_timeline": "Triển khai trong tháng này",
+    "need_text": "Cần mở rộng kho bãi và hệ thống quản lý dòng tiền tự động cho 3 chi nhánh mới.",
+    "rm_note": "Demo data — RM-999",
+    "priority": "normal",
+    "current_products": [],
+    "submission_source": "rm"
+  },
+  "profile": {
+    "snapshot_id": "SNAP-E68187CA93D0",
+    "schema_version": "1.0.0",
+    "revision": 2,
+    "snapshot_hash": "sha256:a53261a18e9685b39e585b9c9283fa7125c3cbc30ebee9bb90cf9764cdaf963d",
+    "company_identity": {
+      "name": "Công ty Cổ phần Thiết bị Minh Phát",
+      "tax_code": "0109988665",
+      "industry": "Phân phối thiết bị công nghiệp"
+    },
+    "business_profile": {
+      "employees_count": 500,
+      "annual_revenue": 120000000000.0,
+      "operating_years": 8,
+      "account_or_unit_count": 45
+    },
+    "operating_model": {
+      "preferred_timeline": "Triển khai trong tháng này"
+    },
+    "transaction_profile": {},
+    "collection_profile": {},
+    "payment_profile": {},
+    "payroll_profile": {},
+    "cash_flow_profile": {
+      "current_status": "positive"
+    },
+    "technology_profile": {},
+    "financing_profile": {
+      "requested_amount_vnd": 50000000000.0,
+      "has_bad_debt_12m": false
+    },
+    "legal_profile": {
+      "ubo_status": "verified"
+    },
+    "existing_bank_products": [],
+    "explicit_needs": [
+      "cash_management"
+    ],
+    "inferred_candidate_needs": [],
+    "pain_points": [],
+    "missing_information": [],
+    "source_map": {
+      "comp
+
+============================================================
+  ✅ 8. Run Analysis
+============================================================
+{
+  "state_version": 1,
+  "case": {
+    "schema_version": "2.0.0",
+    "case_id": "CASE-75B37E763209",
+    "trace_id": "TRACE-EC40402E70E04C3CA2952A8A67A67839",
+    "status": "pending_approval",
+    "context": {
+      "schema_version": "2.0.0",
+      "employee": {
+        "employee_id": "RM-999",
+        "role": "RM",
+        "organization_unit": "Corporate Banking HN",
+        "permissions": [
+          "case:read",
+          "case:write",
+          "approval:request",
+          "credit:forward"
+        ],
+        "access_scope": {
+          "managed_customer_ids": [
+            "COMP-ABC",
+            "COMP-MP",
+            "COMP-XYZ"
+          ],
+          "branch": "HN01"
+        },
+        "preferences": {}
+      },
+      "workspace": {
+        "session_id": "SESS-MP",
+        "current_screen": "sales_intake",
+        "selected_customer_id": "COMP-MP",
+        "active_case_id": null,
+        "active_task_id": null,
+        "selected_product_ids": []
+      },
+      "customer": {
+        "customer_id": "COMP-MP",
+        "profile_version": "1",
+        "attributes": {
+          "company_name": "Cong ty TNHH Minh Phat",
+          "tax_id": "0109876543",
+          "legal_form": "LLC",
+          "operating_years": 8,
+          "annual_revenue": 120000000000.0,
+          "employees_count": 500,
+          "account_or_unit_count": 45,
+          "cash_flow_status": "positive",
+          "has_bad_debt_12m": false,
+          "ubo_status": "verified",
+          "name": "Công ty Cổ phần Thiết bị Minh Phát",
+          "tax_code": "0109988665",
+          "industry": "Phân phối thiết bị công nghiệp",
+          "requested_amount_vnd": 50000000000.0
+        },
+        "source_observed_at": "2026-07-25T07:39:40.837897Z",
+        "stale": false
+      },
+      "conversation": {
+        "current_goal": null,
+        "confirmed_facts": {},
+        "rejected_assumptions": [],
+        "open_questions": []
+      },
+      "documents": [
+        {
+          "document_id": "DOC-EB0DBA6F9E7
+
+============================================================
+  ✅ 9. List Sales Cases
+============================================================
+[{'case_id': 'CASE-75B37E763209', 'intake_id': 'INTAKE-2AA62902D303', 'intake_status': 'profile_confirmed', 'version': 7, 'customer_id': 'COMP-MP', 'manual_input': {'company_name': 'Công ty Cổ phần Thiết bị Minh Phát', 'tax_code': '0109988665', 'industry': 'Phân phối thiết bị công nghiệp', 'contact': 'Nguyễn Minh Anh · 0901 234 567', 'employees_count': 500, 'annual_revenue': 120000000000.0, 'operating_years': 8, 'requested_amount_vnd': 50000000000.0, 'preferred_timeline': 'Triển khai trong tháng này', 'need_text': 'Cần mở rộng kho bãi và hệ thống quản lý dòng tiền tự động cho 3 chi nhánh mới.', 'rm_note': 'Demo data — RM-999', 'priority': 'normal', 'current_products': [], 'submission_source': 'rm'}, 'profile': {'snapshot_id': 'SNAP-E68187CA93D0', 'schema_version': '1.0.0', 'revision': 2, 'snapshot_hash': 'sha256:a53261a18e9685b39e585b9c9283fa7125c3cbc30ebee9bb90cf9764cdaf963d', 'company_identity': {'name': 'Công ty Cổ phần Thiết bị Minh Phát', 'tax_code': '0109988665', 'industry': 'Phân phối thiết bị công nghiệp'}, 'business_profile': {'employees_count': 500, 'annual_revenue': 120000000000.0, 'operating_years': 8, 'account_or_unit_count': 45}, 'operating_model': {'preferred_timeline': 'Triển khai trong tháng này'}, 'transaction_profile': {}, 'collection_profile': {}, 'payment_profile': {}, 'payroll_profile': {}, 'cash_flow_profile': {'current_status': 'positive'}, 'technology_profile': {}, 'financing_profile': {'requested_amount_vnd': 50000000000.0, 'has_bad_debt_12m': False}, 'legal_profile': {'ubo_status': 'verified'}, 'existing_bank_products': [], 'explicit_needs': ['cash_management'], 'inferred_candidate_needs': [], 'pain_points': [], 'missing_information': [], 'source_map': {'company_identity.name': 'RM_INPUT', 'company_identity.tax_code': 'RM_INPUT', 'company_identity.industry': 'RM_INPUT', 'explicit_needs': 'RM_INPUT', 'business_profile.employees_count': 'RM_INPUT', 'business_profile.annual_revenue': 'RM_INPUT', 'business_profile.operating_years': 'RM_INPUT',
+
+============================================================
+  ⚠️  8/9 STEPS PASSED
+      FAILED: 6. Extracted Profile (HTTP 404)
+============================================================

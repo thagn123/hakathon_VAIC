@@ -19,6 +19,11 @@ const profileLabels = {
 
 const ui = {caseId:null,intakeVersion:null,stateVersion:null,intakeStatus:"draft",runtime:null,profile:null,conflicts:[],documents:[],pendingFiles:[],approvalToken:null,previewHash:null,lastPayload:{}};
 const customerUi = {caseId:null,version:null,pendingFiles:[]};
+
+function newMockFile(name) {
+  const file = new File(["dummy content"], name, { type: "application/octet-stream" });
+  return file;
+}
 const fieldLabels = {
   technical_contact_available:"Đầu mối kỹ thuật tích hợp",
   financial_statements:"Báo cáo tài chính gần nhất",
@@ -610,6 +615,39 @@ function showCustomerCase(data,message){
   $("customerStatusHelp").textContent="RM sẽ đối chiếu hồ sơ, xác nhận context và chịu trách nhiệm cho mọi bước phân tích/phê duyệt tiếp theo.";
   $("customerCurrentCase").classList.remove("hidden");
   $("customerCurrentCase").innerHTML=`<b>${esc(data.case_id)}</b><br><small>Trạng thái: ${esc(statusLabels[data.intake_status]||data.intake_status)}</small>`;
+}
+
+async function resetDemo() {
+  if(!confirm("Hành động này sẽ xoá toàn bộ dữ liệu demo hiện tại (Cases, Intake Sessions). Bạn có chắc chắn?")) return;
+  try {
+    await fetch("/api/v2/demo/reset", { method: "POST" });
+    toast("Đã xoá dữ liệu Demo thành công.");
+    setTimeout(() => location.reload(), 1000);
+  } catch(e) {
+    toast("Lỗi khi reset demo: " + e.message, "error");
+  }
+}
+
+function fillCustomerDemoData() {
+  $("customerCompanyName").value = "Công ty Cổ phần Thiết bị Minh Phát";
+  $("customerTaxCode").value = "0109988665";
+  $("customerIndustry").value = "Phân phối thiết bị công nghiệp";
+  $("customerContact").value = "Nguyễn Minh Anh · 0901 234 567";
+  $("customerEmployees").value = "500";
+  $("customerRevenue").value = "120000000000";
+  $("customerOperatingYears").value = "8";
+  $("customerRequestedAmount").value = "50000000000";
+  $("customerTimeline").value = "Triển khai trong tháng này";
+  $("customerNeedText").value = "Cần mở rộng kho bãi và hệ thống quản lý dòng tiền tự động cho 3 chi nhánh mới.";
+  
+  // Also mock 3 files
+  customerUi.pendingFiles = [
+    newMockFile("Giay_DKKD_Minh_Phat_2026.pdf"),
+    newMockFile("BCTC_Minh_Phat_2025_KiemToan.pdf"),
+    newMockFile("Danh_Sach_Nhan_Su_T5.xlsx")
+  ];
+  renderCustomerPendingFiles();
+  toast("Đã tự động điền dữ liệu demo (Công ty Minh Phát).", "success");
 }
 
 async function submitCustomerIntake(){

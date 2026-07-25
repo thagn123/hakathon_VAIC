@@ -602,7 +602,16 @@
       <div class="customer-grid">
         <main class="customer-main">
           <section class="panel">
-          <div class="panel-title"><div><span class="eyebrow">THÔNG TIN DOANH NGHIỆP</span><h2>Phiếu nhu cầu Minh Phát</h2><p>Điền đủ thông tin giúp RM không phải hỏi lại nhiều lần.</p></div></div>
+          <div class="panel-title">
+            <div>
+              <span class="eyebrow">THÔNG TIN DOANH NGHIỆP</span>
+              <div style="display:flex; align-items:center; gap:16px;">
+                <h2 style="margin:0;">Phiếu nhu cầu Khách hàng</h2>
+                <button type="button" class="button secondary" onclick="fillCustomerDemoData()" style="padding:4px 10px; font-size:12px;">Use Demo Data</button>
+              </div>
+              <p>Điền đủ thông tin giúp RM không phải hỏi lại nhiều lần.</p>
+            </div>
+          </div>
           <div class="form-grid">
             <label class="field span-2">Tên doanh nghiệp<input id="customerCompanyName" value="Công ty Cổ phần Thiết bị Minh Phát"></label>
             <label class="field">Mã số thuế<input id="customerTaxCode" value="0109988665"></label>

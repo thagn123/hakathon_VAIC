@@ -46,7 +46,15 @@ class BaseExpertRuntime:
 
         if self.client is None:
             self.last_fallback_reason = "llm_not_configured"
-            return None
+            return {
+                "decision_rationale_summary": ["Fallback: LLM is disabled. Using static rules."],
+                "inferences": [{"statement": "Sử dụng dữ liệu tĩnh Demo", "basis": ["STATIC_RULE"]}],
+                "unknowns": [{"field": "LLM_ANALYSIS", "impact": "Hệ thống tự động sử dụng hard-rules.", "next_evidence": "Bật lại AGENTIC_LLM_ENABLED"}],
+                "credit_officer_focus": [{"topic": "Duyệt hồ sơ cơ bản", "why": "Chế độ demo mode"}],
+                "status": "CONDITIONAL",
+                "evidence_refs": [],
+                "missing_information": []
+            }
         safe_system = (
             system_prompt
             + "\nChỉ trả JSON gồm kết luận ngắn, fact, inference, unknown và rationale có thể kiểm chứng. "
@@ -73,4 +81,13 @@ class BaseExpertRuntime:
         except Exception as exc:  # provider/schema failure must degrade safely
             self.last_fallback_reason = type(exc).__name__
             logger.warning("expert_llm_enrichment_failed", extra={"error_type": type(exc).__name__})
-            return None
+            # Fallback to static JSON structure to satisfy frontend when LLM is off
+            return {
+                "decision_rationale_summary": ["Fallback: LLM is disabled or failed. Using static rules."],
+                "inferences": [{"statement": "Sử dụng dữ liệu tĩnh Demo", "basis": ["STATIC_RULE"]}],
+                "unknowns": [{"field": "LLM_ANALYSIS", "impact": "Hệ thống tự động sử dụng hard-rules.", "next_evidence": "Bật lại AGENTIC_LLM_ENABLED"}],
+                "credit_officer_focus": [{"topic": "Duyệt hồ sơ cơ bản", "why": "Chế độ demo mode"}],
+                "status": "CONDITIONAL",
+                "evidence_refs": [],
+                "missing_information": []
+            }

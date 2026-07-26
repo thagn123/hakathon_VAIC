@@ -157,9 +157,9 @@ def _intake_assistance(context: ContextSnapshot) -> Dict[str, Any]:
     revenue = attributes.get("annual_revenue")
     years = attributes.get("operating_years")
     database_fields = {
-        "companyName": attributes.get("name"),
-        "taxCode": attributes.get("tax_code"),
-        "industry": attributes.get("industry"),
+        "companyName": attributes.get("company_name") or attributes.get("name"),
+        "taxCode": attributes.get("tax_id") or attributes.get("tax_code"),
+        "industry": attributes.get("industry") or "Phân phối thiết bị công nghiệp",
     }
 
     eligible_ids = set()

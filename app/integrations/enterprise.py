@@ -145,13 +145,23 @@ _EMPLOYEE_COPILOT_DEMO_PERSONAS: list[tuple[str, str, str, list[str], dict]] = [
      ["case:read", "product:recommend", "product:verify_fit", "product:manage_knowledge"],
      {"managed_customer_ids": ["COMP-ABC", "COMP-MP", "COMP-XYZ"], "branch": "HN01"}),
     ("SPEC-CREDIT-001", "Specialist", "Credit Risk & Underwriting",
-     ["case:read", "credit:analyze_file", "credit:review_structure", "credit:manage_knowledge"],
+     # "credit:appraise" is required by POST /api/v2/credit-requests/{id}/
+     # appraisal's require_capability() check -- without it here,
+     # ensure_employee_copilot_demo_personas() (called at every process
+     # start, unconditional ON CONFLICT UPDATE) permanently overwrites this
+     # employee's real IAM permissions row and the Credit Specialist can
+     # never submit an appraisal (403 on every attempt).
+     ["case:read", "credit:analyze_file", "credit:review_structure", "credit:manage_knowledge", "credit:appraise"],
      {"managed_customer_ids": ["COMP-ABC", "COMP-MP", "COMP-XYZ"], "branch": "HN01"}),
     ("SPEC-INSURANCE-001", "Specialist", "Corporate Insurance Advisory",
      ["case:read", "insurance:analyze_coverage", "insurance:review_coverage", "insurance:manage_knowledge"],
      {"managed_customer_ids": ["COMP-ABC", "COMP-MP", "COMP-XYZ"], "branch": "HN01"}),
     ("MGR-HN-01", "Manager", "Branch HN Management",
-     ["team:view_workload", "case:read"],
+     # Same class of bug as SPEC-CREDIT-001 above: "credit:final_approve" is
+     # required by POST /api/v2/credit-requests/{id}/decision's
+     # require_capability() check but was missing here, so the Manager's
+     # final approve/reject decision 403'd on every attempt.
+     ["team:view_workload", "case:read", "credit:final_approve"],
      {"managed_customer_ids": ["COMP-ABC", "COMP-MP", "COMP-XYZ"], "branch": "HN01"}),
 ]
 

@@ -10,6 +10,7 @@ from app.api.v2.employee_router import require_capability, require_verified_iden
 from app.config import settings
 from app.credit.service import CreditReadinessService
 from app.integrations.enterprise import SQLiteCRMAdapter
+from app.intake import IntakeService
 from app.observability.runtime import JsonEventLogger
 from app.schemas.v2.credit_request import (
     CreditAppraisalRequest,
@@ -19,6 +20,7 @@ from app.schemas.v2.credit_request import (
 )
 from app.schemas.v2.employee import RoleType, VerifiedIdentity
 from app.storage.credit_request_repository import CreditRequestConflict, CreditRequestRepository
+from app.storage.repository import V2Repository
 
 
 router = APIRouter(prefix="/credit-requests", tags=["Corporate Credit Requests"])
@@ -149,10 +151,18 @@ def create_credit_request(
 
 
 def _enrich_with_sales_case(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    from app.storage.repository import repo
-    from app.api.v2.intake_service import intake_service
-    repository = repo()
-    service = intake_service()
+    # V2Repository/IntakeService are constructed fresh per call (never
+    # module-level singletons) so settings.V2_DB_PATH is read live -- same
+    # rationale as app/api/v2/router.py's repo()/intake_service() closures
+    # and app/api/v2/employee_router.py's _repo(). Previously this imported
+    # a `repo`/`intake_service` name from modules that never defined one at
+    # module scope (both only exist as closures private to
+    # router.py:create_router()), so this function raised ImportError on
+    # every call -- GET /api/v2/credit-requests and GET
+    # /api/v2/credit-requests/{id} 500'd unconditionally for every RM/Credit
+    # Specialist/Manager caller.
+    repository = V2Repository(settings.V2_DB_PATH)
+    service = IntakeService(repository)
     
     enriched = []
     for row in rows:

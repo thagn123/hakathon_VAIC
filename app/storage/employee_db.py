@@ -346,7 +346,16 @@ def init_employee_db() -> None:
         """,
         (
             "SPEC-CREDIT-001", "credit_specialist", "Credit Risk & Underwriting",
-            json.dumps(["case:read", "credit:analyze_file", "credit:review_structure", "credit:manage_knowledge"]),
+            # This idempotent migration previously dropped "credit:appraise"
+            # (present in the original seed above) every time the server
+            # started, since this UPSERT runs unconditionally and always
+            # overwrites permissions -- POST /api/v2/credit-requests/{id}/
+            # appraisal's require_capability(identity, "credit:appraise")
+            # 403'd unconditionally for SPEC-CREDIT-001 as a result.
+            json.dumps([
+                "case:read", "credit:analyze_file", "credit:review_structure",
+                "credit:manage_knowledge", "credit:appraise",
+            ]),
             json.dumps(["COMP-ABC", "COMP-MP", "COMP-XYZ"]),
         ),
     )

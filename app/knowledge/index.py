@@ -281,7 +281,8 @@ class CachedGeminiEmbedding:
     def __init__(self, dimension: int = 3072, cache_file: Optional[Path] = None) -> None:
         self.dimension = dimension
         self.api_key = settings.GOOGLE_API_KEY or os.getenv("GOOGLE_API_KEY")
-        self.cache_file = cache_file or Path(settings.VECTOR_DB_DIR) / "gemini_vector_cache.json"
+        cache_default = Path("/tmp/gemini_vector_cache.json") if os.getenv("VERCEL") else Path(settings.VECTOR_DB_DIR) / "gemini_vector_cache.json"
+        self.cache_file = cache_file or cache_default
         self.cache: dict[str, List[float]] = {}
         if self.cache_file.exists():
             try:
@@ -334,7 +335,8 @@ class CachedOpenAIEmbedding:
         self.dimension = dimension
         self.api_key = settings.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY")
         self.client = None
-        self.cache_file = cache_file or Path(settings.VECTOR_DB_DIR) / "openai_vector_cache.json"
+        cache_default = Path("/tmp/openai_vector_cache.json") if os.getenv("VERCEL") else Path(settings.VECTOR_DB_DIR) / "openai_vector_cache.json"
+        self.cache_file = cache_file or cache_default
         self.cache: dict[str, List[float]] = {}
         if self.cache_file.exists():
             try:

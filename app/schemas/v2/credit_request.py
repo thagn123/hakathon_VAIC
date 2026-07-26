@@ -46,6 +46,10 @@ class CreditAppraisalRequest(BaseModel):
 
     recommendation: Literal["recommend", "not_recommended", "needs_more_information"]
     reason: str = Field(min_length=5, max_length=2000)
+    # Only meaningful when recommendation == "needs_more_information": what
+    # kind of document the customer needs to (re)submit, backing the real
+    # DocumentRequest created for that decision.
+    requested_document_type: str = Field(default="financial_statement", max_length=100)
 
 
 class CreditDecisionRequest(BaseModel):
@@ -53,3 +57,9 @@ class CreditDecisionRequest(BaseModel):
 
     decision: Literal["approved", "rejected", "needs_more_information"]
     reason: str = Field(min_length=5, max_length=2000)
+
+
+class CreditProposalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    note: str = Field(default="", max_length=2000)

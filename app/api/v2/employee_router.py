@@ -61,6 +61,7 @@ from app.knowledge.service import ProductKnowledgeService
 from app.observability.runtime import JsonEventLogger, metrics
 from app.reliability.capability_registry import has_capability
 from app.storage.repository import StateConflictError, V2Repository
+from app.storage.workflow_repository import WorkflowRepository
 from app.schemas.v2.agent_knowledge import (
     DOMAIN_BY_ROLE,
     MANAGE_CAPABILITY_BY_DOMAIN,
@@ -88,6 +89,7 @@ from app.schemas.v2.employee import (
 from app.schemas.v2.planning import NextBestQuestion
 from app.schemas.v2.shared_case_state import ApprovalStatus, CaseStatus
 from app.schemas.v2.specialist_review import (
+    ForwardToSpecialistRequest,
     OperationalReadinessRequest,
     OperationalReadinessSnapshot,
     SpecialistReviewRecord,
@@ -697,7 +699,22 @@ def _reviewer_capability(role: RoleType, decision: str) -> str:
         return "product:verify_fit"
     if role == RoleType.CREDIT_SPECIALIST:
         return "credit:review_structure"
+    if role == RoleType.INSURANCE_SPECIALIST:
+        return "insurance:review_coverage"
     raise ValueError(f"unsupported specialist role: {role.value}")
+
+
+_SPECIALIST_PERSONA_BY_ROLE = {
+    RoleType.PRODUCT_SPECIALIST: "SPEC-PROD-001",
+    RoleType.CREDIT_SPECIALIST: "SPEC-CREDIT-001",
+    RoleType.INSURANCE_SPECIALIST: "SPEC-INSURANCE-001",
+    RoleType.LEGAL_SPECIALIST: "SPEC-LEGAL-001",
+}
+_PRIORITY_TO_URGENCY_RISK = {
+    "high": (0.9, 0.8),
+    "medium": (0.6, 0.5),
+    "low": (0.3, 0.2),
+}
 
 
 def _notification_item_id(
@@ -741,6 +758,91 @@ def _notify_rm(
             "customer_id": str(state_value.context.customer.customer_id),
         }
     )
+
+
+def _workflow() -> WorkflowRepository:
+    """Constructed fresh per call, same rationale as _repo() above."""
+    return WorkflowRepository(settings.V2_DB_PATH)
+
+
+@case_action_router.post("/{case_id}/forward-to-specialist", status_code=status.HTTP_201_CREATED)
+def forward_case_to_specialist(
+    case_id: str,
+    body: ForwardToSpecialistRequest,
+    identity: VerifiedIdentity = Depends(require_verified_identity),
+) -> Dict[str, Any]:
+    """RM assigns a case to a specialist role: creates a real WorkItem the
+    specialist's own queue reads, a timeline event, and a notification.
+    Never changes case status or submits a review decision -- only the
+    specialist's own POST .../specialist-reviews (submit_specialist_review
+    below) can do that. This is what the RM "Chuyen Chuyen vien kiem tra"
+    button now calls; it used to call submit_specialist_review's own
+    endpoint with a malformed findings payload, which is a structurally
+    different action (a specialist clearing/blocking a case, not an RM
+    assigning one)."""
+    if identity.roles[0] != RoleType.RM:
+        raise _error(status.HTTP_403_FORBIDDEN, "RM_ROLE_REQUIRED", "Chi RM duoc chuyen case cho chuyen vien.")
+    require_capability(identity, "specialist_review:request")
+
+    repo = _repo()
+    stored = repo.get_case(case_id)
+    if stored is None:
+        raise _error(status.HTTP_404_NOT_FOUND, "CASE_NOT_FOUND", "Case khong ton tai.")
+    state_value = stored.state
+    if state_value.context.customer.customer_id not in identity.customer_scope:
+        metrics.increment("security.case_scope_denied")
+        raise _error(status.HTTP_403_FORBIDDEN, "FORBIDDEN", "Case ngoai pham vi khach hang duoc giao.")
+
+    target_employee_id = _SPECIALIST_PERSONA_BY_ROLE[body.specialist_role]
+    urgency, risk = _PRIORITY_TO_URGENCY_RISK[body.priority]
+    item_id = f"FORWARD-{case_id}-{body.specialist_role.value}-v{stored.version}"
+    now = datetime.now(timezone.utc)
+
+    create_work_item(
+        {
+            "item_id": item_id,
+            "employee_id": target_employee_id,
+            "title": f"RM yeu cau {body.specialist_role.value} kiem tra: {body.reason[:160]}",
+            "urgency": urgency,
+            "risk_severity": risk,
+            "business_impact": 0.6,
+            "customer_commitment": 0.3,
+            "dependency_unblock": 0.5,
+            "ownership_match": 1.0,
+            "estimated_effort": 0.3,
+            "dependency_ids": [],
+            "role_required": body.specialist_role.value,
+            "customer_id": str(state_value.context.customer.customer_id),
+        }
+    )
+
+    workflow = _workflow()
+    workflow.append_timeline_event(
+        case_id=case_id, event_type="WORK_ITEM_CREATED", actor_role=RoleType.RM.value,
+        actor_id=identity.employee_id,
+        title=f"RM chuyen case cho {body.specialist_role.value}",
+        description=body.reason, entity_type="work_item", entity_id=item_id,
+        metadata={"evidence_refs": body.evidence_refs, "priority": body.priority},
+    )
+    workflow.create_notification(
+        recipient_id=target_employee_id, recipient_role=body.specialist_role.value,
+        case_id=case_id, type_="case_forwarded",
+        title=f"Case {case_id} can ban kiem tra",
+        message=body.reason, route=f"/cases/{case_id}/review",
+    )
+
+    _event_logger.emit(
+        "case_forwarded_to_specialist", employee_id=identity.employee_id, case_id=case_id,
+        specialist_role=body.specialist_role.value, work_item_id=item_id,
+    )
+
+    return {
+        "work_item_id": item_id,
+        "case_id": case_id,
+        "assigned_role": body.specialist_role.value,
+        "status": "OPEN",
+        "created_at": now.isoformat(),
+    }
 
 
 @case_action_router.get("/{case_id}/review-context")

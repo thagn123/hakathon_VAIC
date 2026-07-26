@@ -16,7 +16,32 @@ from app.schemas.v2.employee import RoleType
 
 SpecialistDecision = Literal["cleared", "blocked", "needs_more_information"]
 
-_REVIEWER_ROLES = {RoleType.LEGAL_SPECIALIST, RoleType.PRODUCT_SPECIALIST, RoleType.CREDIT_SPECIALIST}
+_REVIEWER_ROLES = {
+    RoleType.LEGAL_SPECIALIST, RoleType.PRODUCT_SPECIALIST, RoleType.CREDIT_SPECIALIST,
+    RoleType.INSURANCE_SPECIALIST,
+}
+
+
+class ForwardToSpecialistRequest(BaseModel):
+    """RM action: create a real WorkItem assigning a case to a specialist
+    role for review. Distinct from SpecialistReviewRequest above -- this
+    never changes case status or clears/blocks anything; it only assigns
+    and notifies. Only the specialist's own SpecialistReviewRequest (their
+    own endpoint, their own role) can change the case's review outcome."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    specialist_role: RoleType
+    reason: str = Field(min_length=3, max_length=2000)
+    evidence_refs: List[str] = Field(default_factory=list)
+    priority: Literal["low", "medium", "high"] = "medium"
+
+    @field_validator("specialist_role")
+    @classmethod
+    def _must_be_a_specialist_role(cls, value: RoleType) -> RoleType:
+        if value not in _REVIEWER_ROLES:
+            raise ValueError(f"specialist_role must be one of {sorted(r.value for r in _REVIEWER_ROLES)}")
+        return value
 
 
 class SpecialistReviewFinding(BaseModel):

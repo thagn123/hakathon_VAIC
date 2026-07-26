@@ -61,6 +61,7 @@ from app.schemas.v2.shared_case_state import (
 )
 from app.safety.input_guardrails_v2 import screen_input
 from app.storage.repository import StateConflictError, StoredCase, StoredIntake, V2Repository
+from app.storage.workflow_repository import WorkflowRepository
 from app.workflow.engine import V2WorkflowEngine
 from app.workflow.impact import CONTEXT_CORRECTION_POLICIES
 
@@ -350,6 +351,12 @@ def create_router(
         docs/SPECIALIST_REVIEW_IMPLEMENTATION_REPORT.md sections 8/11.5."""
         return repository or V2Repository(settings.V2_DB_PATH)
 
+    def workflow_repo() -> WorkflowRepository:
+        """Real timeline_events writer for the SalesCase intake/analysis
+        pipeline -- named distinctly from the `workflow` WorkflowEngine
+        variable below to avoid shadowing it."""
+        return WorkflowRepository(settings.V2_DB_PATH)
+
     workflow = engine or V2WorkflowEngine()
     context_assembler = assembler or _default_assembler()
     logger = event_logger or JsonEventLogger(settings.AUDIT_LOG_PATH)
@@ -581,6 +588,11 @@ def create_router(
         )
         logger.emit("sales_case_draft_created", case_id=stored.session.case_id, employee_id=x_employee_id)
         metrics.increment("intake.created")
+        workflow_repo().append_timeline_event(
+            case_id=stored.session.case_id, event_type="CASE_CREATED",
+            actor_role=actor_role(x_employee_id), actor_id=x_employee_id,
+            title=f"Case {stored.session.case_id} duoc tao", entity_type="case", entity_id=stored.session.case_id,
+        )
         if replay_key:
             result = repo().save_idempotent_result(replay_key, "create_sales_case", "draft", result)
         response.headers["ETag"] = str(stored.version)
@@ -678,6 +690,13 @@ def create_router(
         response.headers["ETag"] = str(stored.version)
         logger.emit("case_documents_uploaded", case_id=stored.session.case_id, count=len(receipts))
         metrics.increment("intake.documents_uploaded", len(receipts))
+        for receipt in receipts:
+            workflow_repo().append_timeline_event(
+                case_id=stored.session.case_id, event_type="DOCUMENT_UPLOADED",
+                actor_role=actor_role(x_employee_id), actor_id=x_employee_id,
+                title=f"Tai len {receipt.get('filename', 'tai lieu')}",
+                entity_type="document", entity_id=receipt.get("document_id"),
+            )
         return {**intake_payload(stored), "documents": receipts}
 
     @router.get("/sales-cases/{case_id}/documents")
@@ -777,6 +796,11 @@ def create_router(
             trace_id=f"TRACE-{uuid.uuid4().hex.upper()}", actor=x_employee_id,
             action="customer_profile_confirmed", payload={"snapshot_hash": profile.snapshot_hash, "revision": profile.revision},
         )
+        workflow_repo().append_timeline_event(
+            case_id=case_id, event_type="PROFILE_CONFIRMED",
+            actor_role=actor_role(x_employee_id), actor_id=x_employee_id,
+            title="RM da xac nhan Customer Business Snapshot",
+        )
         response.headers["ETag"] = str(stored.version)
         return intake_payload(stored)
 
@@ -862,6 +886,11 @@ def create_router(
         repo().append_audit(
             event_id=f"EVT-{uuid.uuid4().hex}", case_id=case_id, trace_id=stored_case.state.trace_id,
             actor="Planner", action=audit_action, payload={"snapshot_hash": profile.snapshot_hash, "status": stored_case.state.status.value},
+        )
+        workflow_repo().append_timeline_event(
+            case_id=case_id, event_type="AGENT_ANALYSIS_COMPLETED",
+            actor_role=actor_role(x_employee_id), actor_id=x_employee_id,
+            title=f"Phan tich Multi-Agent hoan tat -- trang thai {stored_case.state.status.value}",
         )
         response.headers["X-Trace-ID"] = stored_case.state.trace_id
         response.headers["ETag"] = str(stored_case.version)

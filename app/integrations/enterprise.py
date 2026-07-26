@@ -130,7 +130,16 @@ _EMPLOYEE_COPILOT_DEMO_PERSONAS: list[tuple[str, str, str, list[str], dict]] = [
      ["case:create", "case:read", "case:write"],
      {"managed_customer_ids": ["COMP-MP"], "branch": "CUSTOMER_PORTAL"}),
     ("RM-999", "RM", "Corporate Banking HN",
-     ["case:read", "case:write", "approval:request", "credit:forward"],
+     # "specialist_review:request" backs POST /api/v2/cases/{id}/
+     # forward-to-specialist (RM assigns a case to a specialist, creating a
+     # real WorkItem) -- this capability already existed in
+     # capability_registry.py's ROLE_CAPABILITIES for RM but was never
+     # granted here, so no RM could ever pass require_capability() for it.
+     # "credit:create_proposal" backs POST /api/v2/credit-requests/{id}/
+     # proposal, the new gated step between specialist clearance and
+     # Manager's final decision.
+     ["case:read", "case:write", "approval:request", "credit:forward",
+      "specialist_review:request", "credit:create_proposal"],
      {"managed_customer_ids": ["COMP-ABC", "COMP-MP", "COMP-XYZ"], "branch": "HN01"}),
     ("RM-001", "RM", "Corporate Banking HCM",
      ["case:read", "case:write"],

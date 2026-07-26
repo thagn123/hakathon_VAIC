@@ -28,6 +28,7 @@ ROLE_CAPABILITIES: Dict[RoleType, Set[str]] = {
         "document:upload",
         "document:process",
         "credit:forward",
+        "credit:create_proposal",
     },
     RoleType.PRODUCT_SPECIALIST: {
         "case:read",

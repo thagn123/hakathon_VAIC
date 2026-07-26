@@ -18,6 +18,7 @@ from app.api.v2.employee_router import knowledge_router
 from app.api.v2.employee_router import recommendation_router
 from app.api.v2.employee_router import router as employee_router
 from app.api.v2.demo_router import router as demo_router
+from app.api.v2.workflow_router import router as workflow_router
 
 app = FastAPI(
     title="SHB Corporate Expert Workspace",
@@ -42,6 +43,7 @@ app.include_router(recommendation_router, prefix="/api/v2")
 app.include_router(case_action_router, prefix="/api/v2")
 app.include_router(knowledge_router, prefix="/api/v2")
 app.include_router(demo_router, prefix="/api/v2")
+app.include_router(workflow_router, prefix="/api/v2")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 @app.get("/health")

@@ -1,0 +1,2 @@
+role: credit_specialist
+permissions: ['case:read', 'credit:analyze_file', 'credit:review_structure', 'credit:manage_knowledge']

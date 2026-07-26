@@ -1,0 +1,41 @@
+[
+  {
+    "staff": "SPEC-LEGAL-001",
+    "login_error": "",
+    "role_badge": "Role: Legal/Compliance Reviewer",
+    "queue_item_count": 1,
+    "queue_titles": [
+      "69 pts\nThẩm định điều kiện UBO chưa xác minh Minh Phát\n\nKH: COMP-MP\n\nHồ sơ khách hàng phân khúc lớn có doanh số tiềm năng cao; Hoàn thành task này sẽ mở khóa các bước thẩm định tiếp theo"
+    ],
+    "target_case_visible_anywhere_on_page": false,
+    "http_errors": [
+      "503 http://127.0.0.1:8000/api/v2/sales-cases",
+      "403 http://127.0.0.1:8000/api/v2/credit-requests"
+    ]
+  },
+  {
+    "staff": "SPEC-PROD-001",
+    "login_error": "",
+    "role_badge": "Role: Product Specialist",
+    "queue_item_count": 1,
+    "queue_titles": [
+      "62.5 pts\nXác nhận product-fit gói Cash Management\n\nKH: COMP-MP\n\nHồ sơ khách hàng phân khúc lớn có doanh số tiềm năng cao"
+    ],
+    "target_case_visible_anywhere_on_page": false,
+    "http_errors": [
+      "503 http://127.0.0.1:8000/api/v2/sales-cases",
+      "403 http://127.0.0.1:8000/api/v2/credit-requests"
+    ]
+  },
+  {
+    "staff": "INS-001",
+    "login_error": "Sai tai khoan hoac mat khau.",
+    "role_badge": "Chưa đăng nhập",
+    "queue_item_count": 0,
+    "queue_titles": [],
+    "target_case_visible_anywhere_on_page": false,
+    "http_errors": [
+      "401 http://127.0.0.1:8000/api/v2/auth/login"
+    ]
+  }
+]

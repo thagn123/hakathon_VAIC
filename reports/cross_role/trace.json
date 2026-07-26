@@ -1,0 +1,285 @@
+{
+  "run_marker": "96DE5FFB",
+  "trace": [
+    {
+      "step": "step01_customer_login",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step01_customer_intake_submitted",
+      "case_banner": "CASE-5AA48A5C7202\nTrạng thái: Hồ sơ nháp",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step01_customer_initial_upload",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step01_customer_credit_request_submitted",
+      "result_text": "",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step01_db_verified",
+      "request_id": "CR-699DFBE988D5",
+      "case_id": "CASE-5AA48A5C7202",
+      "status": "WithRM"
+    },
+    {
+      "step": "step02_rm_login",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step02a_rm_resolved_conflicts",
+      "conflicts_resolved": 4,
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step02_rm_processes_case_and_runs_agent",
+      "rm_opened_case": true,
+      "profile_confirmed": true,
+      "confirm_toast": "Customer Business Snapshot đã được xác nhận và khóa hash.",
+      "analysis_ran": true,
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step03_rm_forward_clicked",
+      "clicked": true,
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step03_db_verify_work_item_created",
+      "status": "PendingAppraisal",
+      "expected_status": "PendingAppraisal",
+      "matches_expected": true,
+      "work_item_persisted": true,
+      "work_item_role": "credit_specialist"
+    },
+    {
+      "step": "step03b_forwardToSpecialist_button_probe",
+      "case_pending_review": false,
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step04_credit_specialist_login",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step04_dynamic_specialist_queue",
+      "item_count": 10,
+      "contains_real_forwarded_item": true,
+      "queue_excerpt": "PENDING\nCông ty Cổ phần Thiết bị Minh Phát\n\nTham dinh ho so tin dung Công ty Cổ phần Thiết bị Minh Phát (CR-699DFBE988D5)\n\ncredit_appraisal · 6 evidence claim(s) · 06:44:58 26/7/2026\nPENDING\nCông ty Cổ phần Thiết bị Minh Phát\n\nXem xet lai - co ho so moi tu khach hang (CR-CC04B0A20EF9)\n\ncredit_apprai"
+    },
+    {
+      "step": "step04_request_visible_in_specialist_queue",
+      "found": true,
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step05_needs_more_information_submitted",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step05_db_verify_needs_more_info_and_document_request",
+      "status": "WithRM",
+      "specialist_recommendation": "needs_more_information",
+      "specialist_reason": "[RUN-96DE5FFB-R1] Bao cao tai chinh hien tai da het hieu luc. Can bo sung BCTC nam gan nhat de tiep tuc danh gia.",
+      "document_request_persisted": true,
+      "document_request_status": "REQUESTED",
+      "customer_safe_reason": "Chuyen vien tham dinh tin dung can quy khach bo sung ho so de tiep tuc xu ly yeu cau tin dung. Vui long tai len tai lieu thay the.",
+      "leaks_internal_reason_into_customer_safe": false
+    },
+    {
+      "step": "step06_customer_sees_document_request",
+      "panel_shows_open_request": true,
+      "panel_excerpt": "📋 Bo sung ho so theo yeu cau Chuyen vien tin dung\n\nChuyen vien tham dinh tin dung can quy khach bo sung ho so de tiep tuc xu ly yeu cau tin dung. Vui long tai len tai lieu thay the.\n\nYêu cầu lúc 13:45:03 26/7/2026 · Đang chờ bạn bổ sung\nTải lên hồ sơ thay thế\n📋 Bo sung ho so theo yeu cau Chuyen vien tin dung\n\nChuyen vien tham dinh tin dung can quy khach bo sung ho so de tiep tuc xu ly yeu cau tin ",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step07_customer_resumes_after_relogin",
+      "resume_possible": true,
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step08_customer_resubmission_upload",
+      "clicked": true,
+      "toast_text": "Đã gửi hồ sơ thay thế. Chuyên viên sẽ xem xét lại.",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step09_db_verify_evidence_update",
+      "document_request_status": "SUBMITTED",
+      "replacement_document_id": "DOC-1DFA9C19F49A",
+      "total_documents_on_case": 2,
+      "old_document_preserved": true
+    },
+    {
+      "step": "step10_specialist_notification_on_resubmission",
+      "notification_found": true,
+      "notification": {
+        "notification_id": "NOTIF-A94FD38DC1D3",
+        "recipient_id": "SPEC-CREDIT-001",
+        "recipient_role": "credit_specialist",
+        "case_id": "CASE-5AA48A5C7202",
+        "type": "customer_resubmitted",
+        "title": "Khach hang da bo sung ho so cho CR-699DFBE988D5",
+        "message": "Co ho so moi can xem xet lai.",
+        "route": "/credit-requests/CR-699DFBE988D5",
+        "read_at": null,
+        "created_at": "2026-07-26T06:45:12.102902+00:00"
+      }
+    },
+    {
+      "step": "step11_specialist_notification_bell",
+      "unread_count_text": "14"
+    },
+    {
+      "step": "step12_credit_specialist_second_review_submitted",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step13_db_verify_cleared_and_review_history_preserved",
+      "status": "PendingFinalApproval",
+      "expected": "PendingFinalApproval",
+      "matches_expected": true,
+      "review_round_count": 2,
+      "round1_recommendation": "needs_more_information",
+      "round1_reason_preserved": true,
+      "round2_recommendation": "recommend",
+      "flat_column_now_shows_round2_only": true
+    },
+    {
+      "step": "step14_rm_sees_feedback_and_nbw",
+      "rm_sees_reason": true,
+      "proposal_button_visible": true,
+      "form_excerpt": "CR-699DFBE988D5 · Chờ Manager phê duyệt\n\n① Form khách hàng\n→\n② Chuyên viên thẩm định\n→\n③ Agent khuyến nghị\n→\n④ Manager duyệt\n1. Thông tin KYC\nTên công ty\nMã số thuế\nLoại hình pháp lý\nNgười đại diện\n2. Hoạt động kinh doanh\nNgành nghề chính\nQuy mô\n3. Chỉ số tài chính (tỷ VND)\nTổng tài sản\nDoanh thu thuần\nLợi nhuận sau thuế\nTỷ số D/E\n4. CIC và rủi ro\nPhân loại nợ (CIC)\nDư nợ hiện tại (tỷ VND)\nTài sản đảm bảo\nGiá trị TSĐB (tỷ VND)\n5. Lịch sử giao dịch\nCASA bình quân (tỷ VND)\nLịch sử trả nợ\n6. Đề nghị vay\n\nKhoản vay · 5.000.000.000 VND · 12 tháng\n\nMục đích\nTài liệu đính kèm (Từ luồng Nhu cầu)\n📄 bo_",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step15_rm_creates_proposal",
+      "clicked": true,
+      "proposal_created_at": "2026-07-26 06:45:22",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step16_manager_dashboard",
+      "total_cases_text": "56",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step17_manager_decision",
+      "found_for_manager": true,
+      "sees_proposal_gate_notice": true,
+      "acted": true,
+      "final_status": "Approved",
+      "final_decision": "approved",
+      "approved_by": "MGR-HN-01"
+    },
+    {
+      "step": "step18_rm_sees_final_status",
+      "shows_approved": true,
+      "excerpt": "CR-699DFBE988D5 · Đã duyệt · giải ngân\n\n① Form khách hàng\n→\n② Chuyên viên thẩm định\n→\n③ Agent khuyến nghị\n→\n④ Manager duyệt\n1. Thông tin KYC\nTên công ty\nMã số thuế\nLoại hình pháp lý\nNgười đại diện\n2. Hoạt động kinh doanh\nNgành nghề chính\nQuy mô\n3. Chỉ số tài chính (tỷ VND)\nTổng tài sản\nDoanh thu thuần\nLợi nhuận sau thuế\nTỷ số D/E\n4. CIC và rủi ro\nPhân loại nợ (CIC)\nDư nợ hiện tại (tỷ VND)\nTài sản ",
+      "label": "main",
+      "console_errors": [],
+      "http_errors": []
+    },
+    {
+      "step": "step19_timeline_completeness",
+      "total_events": 17,
+      "event_sequence": [
+        "CASE_CREATED",
+        "DOCUMENT_UPLOADED",
+        "CREDIT_REQUEST_SUBMITTED",
+        "PROFILE_CONFIRMED",
+        "WORK_ITEM_CREATED",
+        "AGENT_ANALYSIS_COMPLETED",
+        "SPECIALIST_REVIEW_SUBMITTED",
+        "DOCUMENT_REQUEST_CREATED",
+        "DOCUMENT_UPLOADED",
+        "CUSTOMER_DOCUMENT_RESUBMITTED",
+        "EVIDENCE_UPDATED",
+        "WORK_ITEM_REOPENED",
+        "SPECIALIST_REVIEW_SUBMITTED",
+        "SPECIALIST_REVIEW_CLEARED",
+        "PROPOSAL_CREATED",
+        "APPROVAL_SUBMITTED",
+        "APPROVAL_COMPLETED"
+      ],
+      "missing_required_events": [],
+      "all_required_events_present": true
+    },
+    {
+      "step": "final_unauthorized_data_hidden_check",
+      "customer_visible_fields": [
+        "business_scale",
+        "casa_avg_balance_billion_vnd",
+        "case_id",
+        "cic_debt_classification",
+        "collateral_description",
+        "collateral_value_billion_vnd",
+        "company_name",
+        "current_debt_billion_vnd",
+        "customer_id",
+        "debt_to_equity_ratio",
+        "final_decision",
+        "industry",
+        "legal_type",
+        "net_profit_billion_vnd",
+        "net_revenue_billion_vnd",
+        "purpose",
+        "repayment_history",
+        "representative",
+        "request_id",
+        "request_type",
+        "requested_amount_vnd",
+        "requested_term_months",
+        "status",
+        "submitted_at",
+        "tax_id",
+        "total_assets_billion_vnd",
+        "updated_at"
+      ],
+      "leaks_specialist_reason": false,
+      "leaks_specialist_recommendation": false,
+      "leaks_proposal_note": false
+    }
+  ]
+}

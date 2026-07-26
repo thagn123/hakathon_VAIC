@@ -1,0 +1,7 @@
+--- RM-999 work items mentioning this case ---
+{'item_id': 'REVIEW-NOTIFY-CASE-62D0E05BF2D8-1-needs_more_information-RM-999-978976e74490', 'title': 'Case CASE-62D0E05BF2D8 can bo sung thong tin theo yeu cau cua legal_specialist', 'role_required': 'relationship_manager'}
+--- audit_events for this case ---
+{'action': 'specialist_review_needs_more_information', 'actor': 'SPEC-LEGAL-001', 'at': '2026-07-26T05:05:47.417749+00:00'}
+{'action': 'analysis_started', 'actor': 'Planner', 'at': '2026-07-25T06:45:34.434297+00:00'}
+{'action': 'customer_profile_confirmed', 'actor': 'RM-999', 'at': '2026-07-25T06:45:16.571650+00:00'}
+{'action': 'sales_case_draft_created', 'actor': 'RM-999', 'at': '2026-07-25T06:44:48.668915+00:00'}

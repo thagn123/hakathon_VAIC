@@ -1,0 +1,13 @@
+{
+  "step": "phase1b_forwardToSpecialist_probe",
+  "pending_review_case_found": true,
+  "toast_text": "✓ Đã ghi nhận chuyển Chuyên viên. Chuyên viên sẽ thấy case trong queue khi case đạt trạng thái PENDING_REVIEW.",
+  "clicked": true,
+  "label": "main",
+  "console_errors": [
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)"
+  ],
+  "http_errors": [
+    "422 POST http://127.0.0.1:8000/api/v2/cases/CASE-62D0E05BF2D8/specialist-reviews"
+  ]
+}

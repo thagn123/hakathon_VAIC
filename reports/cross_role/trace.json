@@ -1,5 +1,5 @@
 {
-  "run_marker": "96DE5FFB",
+  "run_marker": "6B46AB80",
   "trace": [
     {
       "step": "step01_customer_login",
@@ -9,7 +9,7 @@
     },
     {
       "step": "step01_customer_intake_submitted",
-      "case_banner": "CASE-5AA48A5C7202\nTrạng thái: Hồ sơ nháp",
+      "case_banner": "CASE-23713BF38801\nTrạng thái: Hồ sơ nháp",
       "label": "main",
       "console_errors": [],
       "http_errors": []
@@ -29,8 +29,8 @@
     },
     {
       "step": "step01_db_verified",
-      "request_id": "CR-699DFBE988D5",
-      "case_id": "CASE-5AA48A5C7202",
+      "request_id": "CR-286B02D202E3",
+      "case_id": "CASE-23713BF38801",
       "status": "WithRM"
     },
     {
@@ -86,9 +86,9 @@
     },
     {
       "step": "step04_dynamic_specialist_queue",
-      "item_count": 10,
+      "item_count": 1,
       "contains_real_forwarded_item": true,
-      "queue_excerpt": "PENDING\nCông ty Cổ phần Thiết bị Minh Phát\n\nTham dinh ho so tin dung Công ty Cổ phần Thiết bị Minh Phát (CR-699DFBE988D5)\n\ncredit_appraisal · 6 evidence claim(s) · 06:44:58 26/7/2026\nPENDING\nCông ty Cổ phần Thiết bị Minh Phát\n\nXem xet lai - co ho so moi tu khach hang (CR-CC04B0A20EF9)\n\ncredit_apprai"
+      "queue_excerpt": "PENDING\nCông ty Cổ phần Thiết bị Minh Phát\n\nTham dinh ho so tin dung Công ty Cổ phần Thiết bị Minh Phát (CR-286B02D202E3)\n\ncredit_appraisal · N/A · 10:54:27 26/7/2026"
     },
     {
       "step": "step04_request_visible_in_specialist_queue",
@@ -107,7 +107,7 @@
       "step": "step05_db_verify_needs_more_info_and_document_request",
       "status": "WithRM",
       "specialist_recommendation": "needs_more_information",
-      "specialist_reason": "[RUN-96DE5FFB-R1] Bao cao tai chinh hien tai da het hieu luc. Can bo sung BCTC nam gan nhat de tiep tuc danh gia.",
+      "specialist_reason": "[RUN-6B46AB80-R1] Bao cao tai chinh hien tai da het hieu luc. Can bo sung BCTC nam gan nhat de tiep tuc danh gia.",
       "document_request_persisted": true,
       "document_request_status": "REQUESTED",
       "customer_safe_reason": "Chuyen vien tham dinh tin dung can quy khach bo sung ho so de tiep tuc xu ly yeu cau tin dung. Vui long tai len tai lieu thay the.",
@@ -116,7 +116,7 @@
     {
       "step": "step06_customer_sees_document_request",
       "panel_shows_open_request": true,
-      "panel_excerpt": "📋 Bo sung ho so theo yeu cau Chuyen vien tin dung\n\nChuyen vien tham dinh tin dung can quy khach bo sung ho so de tiep tuc xu ly yeu cau tin dung. Vui long tai len tai lieu thay the.\n\nYêu cầu lúc 13:45:03 26/7/2026 · Đang chờ bạn bổ sung\nTải lên hồ sơ thay thế\n📋 Bo sung ho so theo yeu cau Chuyen vien tin dung\n\nChuyen vien tham dinh tin dung can quy khach bo sung ho so de tiep tuc xu ly yeu cau tin ",
+      "panel_excerpt": "📋 Bo sung ho so theo yeu cau Chuyen vien tin dung\n\nChuyen vien tham dinh tin dung can quy khach bo sung ho so de tiep tuc xu ly yeu cau tin dung. Vui long tai len tai lieu thay the.\n\nYêu cầu lúc 17:54:33 26/7/2026 · Đang chờ bạn bổ sung\nTải lên hồ sơ thay thế",
       "label": "main",
       "console_errors": [],
       "http_errors": []
@@ -139,7 +139,7 @@
     {
       "step": "step09_db_verify_evidence_update",
       "document_request_status": "SUBMITTED",
-      "replacement_document_id": "DOC-1DFA9C19F49A",
+      "replacement_document_id": "DOC-72E3A5BB453B",
       "total_documents_on_case": 2,
       "old_document_preserved": true
     },
@@ -147,21 +147,21 @@
       "step": "step10_specialist_notification_on_resubmission",
       "notification_found": true,
       "notification": {
-        "notification_id": "NOTIF-A94FD38DC1D3",
+        "notification_id": "NOTIF-5CF864CA5970",
         "recipient_id": "SPEC-CREDIT-001",
         "recipient_role": "credit_specialist",
-        "case_id": "CASE-5AA48A5C7202",
+        "case_id": "CASE-23713BF38801",
         "type": "customer_resubmitted",
-        "title": "Khach hang da bo sung ho so cho CR-699DFBE988D5",
+        "title": "Khach hang da bo sung ho so cho CR-286B02D202E3",
         "message": "Co ho so moi can xem xet lai.",
-        "route": "/credit-requests/CR-699DFBE988D5",
+        "route": "/credit-requests/CR-286B02D202E3",
         "read_at": null,
-        "created_at": "2026-07-26T06:45:12.102902+00:00"
+        "created_at": "2026-07-26T10:54:42.206707+00:00"
       }
     },
     {
       "step": "step11_specialist_notification_bell",
-      "unread_count_text": "14"
+      "unread_count_text": "2"
     },
     {
       "step": "step12_credit_specialist_second_review_submitted",
@@ -184,7 +184,7 @@
       "step": "step14_rm_sees_feedback_and_nbw",
       "rm_sees_reason": true,
       "proposal_button_visible": true,
-      "form_excerpt": "CR-699DFBE988D5 · Chờ Manager phê duyệt\n\n① Form khách hàng\n→\n② Chuyên viên thẩm định\n→\n③ Agent khuyến nghị\n→\n④ Manager duyệt\n1. Thông tin KYC\nTên công ty\nMã số thuế\nLoại hình pháp lý\nNgười đại diện\n2. Hoạt động kinh doanh\nNgành nghề chính\nQuy mô\n3. Chỉ số tài chính (tỷ VND)\nTổng tài sản\nDoanh thu thuần\nLợi nhuận sau thuế\nTỷ số D/E\n4. CIC và rủi ro\nPhân loại nợ (CIC)\nDư nợ hiện tại (tỷ VND)\nTài sản đảm bảo\nGiá trị TSĐB (tỷ VND)\n5. Lịch sử giao dịch\nCASA bình quân (tỷ VND)\nLịch sử trả nợ\n6. Đề nghị vay\n\nKhoản vay · 5.000.000.000 VND · 12 tháng\n\nMục đích\nTài liệu đính kèm (Từ luồng Nhu cầu)\n📄 bo_",
+      "form_excerpt": "CR-286B02D202E3 · Chờ Manager phê duyệt\n\n① Form khách hàng\n→\n② Chuyên viên thẩm định\n→\n③ Agent khuyến nghị\n→\n④ Manager duyệt\n1. Thông tin KYC\nTên công ty\nMã số thuế\nLoại hình pháp lý\nNgười đại diện\n2. Hoạt động kinh doanh\nNgành nghề chính\nQuy mô\n3. Chỉ số tài chính (tỷ VND)\nTổng tài sản\nDoanh thu thuần\nLợi nhuận sau thuế\nTỷ số D/E\n4. CIC và rủi ro\nPhân loại nợ (CIC)\nDư nợ hiện tại (tỷ VND)\nTài sản đảm bảo\nGiá trị TSĐB (tỷ VND)\n5. Lịch sử giao dịch\nCASA bình quân (tỷ VND)\nLịch sử trả nợ\n6. Đề nghị vay\n\nKhoản vay · 5.000.000.000 VND · 12 tháng\n\nMục đích\nTài liệu đính kèm (Từ luồng Nhu cầu)\n📄 bo_",
       "label": "main",
       "console_errors": [],
       "http_errors": []
@@ -192,14 +192,14 @@
     {
       "step": "step15_rm_creates_proposal",
       "clicked": true,
-      "proposal_created_at": "2026-07-26 06:45:22",
+      "proposal_created_at": "2026-07-26 10:54:53",
       "label": "main",
       "console_errors": [],
       "http_errors": []
     },
     {
       "step": "step16_manager_dashboard",
-      "total_cases_text": "56",
+      "total_cases_text": "1",
       "label": "main",
       "console_errors": [],
       "http_errors": []
@@ -216,7 +216,7 @@
     {
       "step": "step18_rm_sees_final_status",
       "shows_approved": true,
-      "excerpt": "CR-699DFBE988D5 · Đã duyệt · giải ngân\n\n① Form khách hàng\n→\n② Chuyên viên thẩm định\n→\n③ Agent khuyến nghị\n→\n④ Manager duyệt\n1. Thông tin KYC\nTên công ty\nMã số thuế\nLoại hình pháp lý\nNgười đại diện\n2. Hoạt động kinh doanh\nNgành nghề chính\nQuy mô\n3. Chỉ số tài chính (tỷ VND)\nTổng tài sản\nDoanh thu thuần\nLợi nhuận sau thuế\nTỷ số D/E\n4. CIC và rủi ro\nPhân loại nợ (CIC)\nDư nợ hiện tại (tỷ VND)\nTài sản ",
+      "excerpt": "CR-286B02D202E3 · Đã duyệt · giải ngân\n\n① Form khách hàng\n→\n② Chuyên viên thẩm định\n→\n③ Agent khuyến nghị\n→\n④ Manager duyệt\n1. Thông tin KYC\nTên công ty\nMã số thuế\nLoại hình pháp lý\nNgười đại diện\n2. Hoạt động kinh doanh\nNgành nghề chính\nQuy mô\n3. Chỉ số tài chính (tỷ VND)\nTổng tài sản\nDoanh thu thuần\nLợi nhuận sau thuế\nTỷ số D/E\n4. CIC và rủi ro\nPhân loại nợ (CIC)\nDư nợ hiện tại (tỷ VND)\nTài sản ",
       "label": "main",
       "console_errors": [],
       "http_errors": []

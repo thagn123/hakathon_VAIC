@@ -76,9 +76,9 @@ class Settings(BaseModel):
     TESSERACT_CMD: str = os.getenv("TESSERACT_CMD", r"C:\Program Files\Tesseract-OCR\tesseract.exe")
 
     # Vector DB settings
-    VECTOR_DB_DIR: str = os.getenv("VECTOR_DB_DIR", "./data/vector_db")
-    V2_DB_PATH: str = os.getenv("V2_DB_PATH", "./data/state/v2.sqlite3")
-    AUDIT_LOG_PATH: str = os.getenv("AUDIT_LOG_PATH", "./data/logs/audit.jsonl")
+    VECTOR_DB_DIR: str = os.getenv("VECTOR_DB_DIR", "/tmp/vector_db" if os.getenv("VERCEL") else "./data/vector_db")
+    V2_DB_PATH: str = os.getenv("V2_DB_PATH", "/tmp/v2.sqlite3" if os.getenv("VERCEL") else "./data/state/v2.sqlite3")
+    AUDIT_LOG_PATH: str = os.getenv("AUDIT_LOG_PATH", "/tmp/audit.jsonl" if os.getenv("VERCEL") else "./data/logs/audit.jsonl")
     APP_ENV: str = os.getenv("APP_ENV", "development")
     DEMO_AUTH_ENABLED: bool = os.getenv(
         "DEMO_AUTH_ENABLED", "true" if os.getenv("APP_ENV", "development") == "development" else "false"

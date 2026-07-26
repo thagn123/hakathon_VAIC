@@ -73,7 +73,7 @@ def test_idempotency_returns_original_result(tmp_path):
 def test_repository_migration_and_health_are_restart_safe(tmp_path):
     path = tmp_path / "state.sqlite3"
     repository = V2Repository(path)
-    assert repository.schema_version() == LATEST_SCHEMA_VERSION == 2
+    assert repository.schema_version() == LATEST_SCHEMA_VERSION == 3
     assert repository.health()["healthy"] is True
     restarted = V2Repository(path)
     assert restarted.schema_version() == LATEST_SCHEMA_VERSION

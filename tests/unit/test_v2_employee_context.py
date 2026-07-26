@@ -283,7 +283,10 @@ def test_personalization_failure_does_not_change_permissions(client, monkeypatch
     body = resp.json()
     # Same permissions/customer_scope as the non-degraded case -- a
     # personalization outage must never touch IAM-derived authorization.
-    assert body["authorization_context"]["permissions"] == ["case:read", "case:write", "approval:request", "credit:forward"]
+    assert body["authorization_context"]["permissions"] == [
+        "case:read", "case:write", "approval:request", "credit:forward",
+        "specialist_review:request", "credit:create_proposal",
+    ]
     assert set(body["authorization_context"]["customer_scope"]) == {"COMP-ABC", "COMP-XYZ", "COMP-MP"}
 
 

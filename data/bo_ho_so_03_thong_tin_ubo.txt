@@ -1,0 +1,16 @@
+THONG TIN CHU SO HUU HUONG LOI (UBO VERIFICATION)
+Cong ty Co phan Thiet bi Minh Phat
+Ma so thue: 0109988665
+
+DANH SACH CHU SO HUU HUONG LOI NAM GIU TU 25% VON GOP/CO PHAN:
+1. Ong Nguyen Van A
+   - Chuc vu: Tong Giam doc / Dai dien phap luat
+   - Ti le so huu co phan: 80% (Chu so huu huong loi chi phoi)
+   - Tinh trang KYC/UBO: Da xac minh dinh danh va kiem tra danh sach PEP/AML - KHONG VI PHAM.
+
+2. Ba Tran Thi B
+   - Ti le so huu co phan: 20%
+   - Tinh trang KYC: Da xac minh.
+
+Ket luan: Ho so UBO da xac minh day du theo quy dinh phap ly hien hanh cua SHB.
+SYNTHETIC DEMO DATA FOR SHB COPILOT.

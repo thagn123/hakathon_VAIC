@@ -581,36 +581,92 @@ def get_team_workload(identity: VerifiedIdentity = Depends(require_verified_iden
 
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # SQLite-compatible queries using json_extract() instead of ->> operator
+    # which is only available in newer SQLite / PostgreSQL
+    blocked_count = 0
+    pending_review_count = 0
+    pending_approval_count = 0
+    completed_count = 0
+    total_cases = 0
+    status_breakdown: Dict[str, int] = {}
+
     try:
-        cursor.execute("SELECT COUNT(*) AS n FROM cases WHERE state_json->>'status' = 'blocked'")
-        blocked_count = cursor.fetchone()["n"]
-    except Exception:
-        # `cases` belongs to V2Repository's schema, not this module's --
-        # tolerate any query issue rather than 500ing the whole dashboard.
-        # A failed statement aborts the PostgreSQL transaction, so roll back
-        # before issuing the remaining queries on this connection.
+        if settings.DATABASE_URL:
+            # PostgreSQL: use ->> operator
+            cursor.execute("SELECT state_json->>'status' AS s, COUNT(*) AS n FROM cases GROUP BY s")
+        else:
+            # SQLite: use json_extract()
+            cursor.execute("SELECT json_extract(state_json, '$.status') AS s, COUNT(*) AS n FROM cases GROUP BY s")
+        for row in cursor.fetchall():
+            s = row["s"] or "unknown"
+            n = row["n"]
+            status_breakdown[s] = n
+            total_cases += n
+            if s == "blocked":
+                blocked_count = n
+            elif s == "pending_review":
+                pending_review_count = n
+            elif s == "pending_approval":
+                pending_approval_count = n
+            elif s in ("completed",):
+                completed_count = n
+    except Exception as exc:
+        logger.warning(f"Failed to query case status breakdown: {exc}")
         conn.rollback()
-        blocked_count = 0
-    cursor.execute("SELECT COUNT(*) AS n FROM employee_work_items WHERE status != 'completed' AND urgency >= 0.8")
-    sla_breaches = cursor.fetchone()["n"]
-    cursor.execute("SELECT feedback, COUNT(*) AS c FROM employee_recommendation_feedback GROUP BY feedback")
-    utilization = {r["feedback"]: r["c"] for r in cursor.fetchall()}
-    cursor.execute("SELECT COUNT(DISTINCT employee_id) AS n FROM employee_personas")
-    cohort_size = cursor.fetchone()["n"]
+
+    try:
+        cursor.execute("SELECT COUNT(*) AS n FROM employee_work_items WHERE status != 'completed' AND urgency >= 0.8")
+        sla_breaches = cursor.fetchone()["n"]
+    except Exception:
+        sla_breaches = 0
+
+    try:
+        cursor.execute("SELECT feedback, COUNT(*) AS c FROM employee_recommendation_feedback GROUP BY feedback")
+        utilization = {r["feedback"]: r["c"] for r in cursor.fetchall()}
+    except Exception:
+        utilization = {}
+
+    try:
+        cursor.execute("SELECT COUNT(DISTINCT employee_id) AS n FROM employee_personas")
+        cohort_size = cursor.fetchone()["n"]
+    except Exception:
+        cohort_size = 0
+
+    # Specialist workload: count open work items per role_required
+    specialist_workload: Dict[str, int] = {}
+    try:
+        cursor.execute(
+            "SELECT role_required, COUNT(*) AS n FROM employee_work_items "
+            "WHERE status != 'completed' GROUP BY role_required"
+        )
+        for row in cursor.fetchall():
+            if row["role_required"]:
+                specialist_workload[row["role_required"]] = row["n"]
+    except Exception:
+        pass
+
     conn.close()
 
     return {
         "branch_id": "BRANCH-HN-01",
         "cohort_size": cohort_size,
         "aggregate_metrics": {
+            "total_cases": total_cases,
             "blocked_cases": blocked_count,
+            "pending_review": pending_review_count,
+            "pending_approval": pending_approval_count,
+            "completed_cases": completed_count,
+            "status_breakdown": status_breakdown,
             "sla_risks": sla_breaches,
+            "specialist_workload": specialist_workload,
             "ai_recommendation_utilization": {
                 "cohort_minimum_size_met": cohort_size >= 5,
                 "utilization_summary": utilization,
             },
         },
     }
+
 
 
 # --- Specialist Review (Product/Legal/Credit act on a case) ----------------

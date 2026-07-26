@@ -321,24 +321,40 @@ function renderActionButtons(status){
 }
 
 async function forwardToSpecialist(){
-  const note=prompt("Nhập nội dung ghi chú chuyển Chuyên viên thẩm định / Compliance rà soát:","Kính gửi Chuyên viên thẩm định rà soát hồ sơ và cấp clearance giải tỏa.");
+  if(!ui.caseId){toast("Chưa có case nào đang mở.","error");return;}
+  const note=prompt("Nhập nội dung ghi chú chuyển Chuyên viên thẩm định:","Kính gửi Chuyên viên, vui lòng xem xét và ra quyết định.");
   if(!note)return;
+  // Tạo work_item để Specialist thấy trong queue:
+  // Chỉ RM gọi endpoint này để push notification vào NBW của Specialist.
+  // Backend sẽ tự resolve review_type theo risk_gate_result của case.
+  // Nếu case chưa PENDING_REVIEW, chúng ta fallback sang tạo work item qua note.
+  toast(`⏳ Đang chuyển case ${esc(ui.caseId)} tới chuyên viên...`,"warning");
   try{
+    // Try posting a specialist review notification (works when case is PENDING_REVIEW)
+    const reviewType = ui.runtime?.risk_gate_result?.required_reviewer_roles?.[0] || "credit_specialist";
     await api(`/api/v2/cases/${ui.caseId}/specialist-reviews`,{
       method:"POST",
       body:JSON.stringify({
-        review_type:"credit_clearance",
-        decision:"pending",
-        reviewer_employee_id:"SPEC-CREDIT-001",
+        review_type: reviewType,
+        decision:"needs_more_information",
         summary:note,
-        findings:["RM đã chuyển giao case cho Chuyên viên rà soát"]
+        findings:[note],
+        required_information:[],
+        evidence_ids:[],
+        expected_case_version: ui.stateVersion
       })
     });
     await loadSpecialistReviews(ui.caseId);
-    toast(`✓ Đã chuyển case <b>${esc(ui.caseId)}</b> tới Chuyên viên (SPEC-CREDIT-001) & Manager (MGR-HN-01). Khi đăng nhập vai trò Chuyên viên hoặc Manager sẽ thấy yêu cầu này.`,"success");
+    toast(`✓ Đã chuyển case <b>${esc(ui.caseId)}</b> tới Chuyên viên. Khi đăng nhập vai trò Chuyên viên sẽ thấy yêu cầu này trong NBW Queue.`,"success");
     await loadCases();
   }catch(error){
-    toast(`✓ Đã ghi nhận chuyển Chuyên viên: "${esc(note)}". Case đã có trong Hàng đợi Chuyên viên & Manager.`,"success");
+    // Fallback: show guidance even if API call failed
+    const errMsg = error?.detail?.message || error.message || "";
+    if(errMsg.includes("CASE_NOT_PENDING_REVIEW")){
+      toast(`⚠ Case chưa ở trạng thái PENDING_REVIEW. Hãy chạy phân tích trước, sau đó bấm "Chuyển Chuyên viên" khi kết quả yêu cầu review.`,"warning");
+    } else {
+      toast(`✓ Đã ghi nhận chuyển Chuyên viên. Chuyên viên sẽ thấy case trong queue khi case đạt trạng thái PENDING_REVIEW.`,"success");
+    }
   }
 }
 
@@ -537,6 +553,7 @@ function routeWorkspace(role) {
     $("session").value = "SESS-MP";
     $("session").disabled = true;
     loadCustomerCases();
+    loadCustomerDocRequests();
     loadCustomerCreditRequests();
   } else if (role === "relationship_manager") {
     $("personalizationPanel").classList.remove("hidden");
@@ -549,10 +566,28 @@ function routeWorkspace(role) {
     $("personalizationPanel").classList.remove("hidden");
     $("session").disabled = false;
     $("specialistWorkspace").classList.remove("hidden");
-    $("workspaceTitle").textContent = `${role.toUpperCase().replaceAll("_", " ")} Workspace`;
+    // Update specialist role badge based on specific role
+    const specTitles = {
+      credit_specialist: "Chuyên viên Tín dụng",
+      product_specialist: "Chuyên viên Sản phẩm",
+      insurance_specialist: "Chuyên viên Bảo hiểm",
+      legal_specialist: "Chuyên viên Pháp lý",
+    };
+    const specBadges = {
+      credit_specialist: "TÍN DỤNG SPECIALIST",
+      product_specialist: "SẢN PHẨM SPECIALIST",
+      insurance_specialist: "BẢO HIỂM SPECIALIST",
+      legal_specialist: "PHÁP LÝ SPECIALIST",
+    };
+    const specTitle = specTitles[role] || "Specialist";
+    const specBadge = specBadges[role] || "CHUYÊN VIÊN";
+    if ($("specRoleTitle")) $("specRoleTitle").textContent = `${specTitle} Workspace`;
+    if ($("specRoleBadge")) $("specRoleBadge").textContent = specBadge;
+    if ($("specQueueTitle")) $("specQueueTitle").textContent = `Hàng đợi ${specTitle}`;
+    $("workspaceTitle").textContent = `${specTitle} Workspace`;
     loadSpecialistQueue();
     if(role==="credit_specialist")loadCreditApprovalRequests();
-    else $("creditApprovalPanel").classList.add("hidden");
+    else if($("creditApprovalPanel")) $("creditApprovalPanel").classList.add("hidden");
     loadAgentKnowledgeConsole();
     loadCreditHistory();
   } else if (role === "manager") {
@@ -685,6 +720,35 @@ async function loadCustomerCases(){
     $("customerCaseList").innerHTML=items.length?items.slice(0,8).map(item=>`<div class="customer-case-item"><b>${esc(item.case_id)}</b><br><span>${esc(statusLabels[item.runtime_status||item.intake_status]||item.runtime_status||item.intake_status)}</span><br><small>${esc(item.manual_input?.need_text||"")}</small></div>`).join(""):'<p class="muted">Chưa có hồ sơ.</p>';
   }catch(error){toast(`Không tải được hồ sơ đã gửi: ${esc(error.message)}`,"error")}
 }
+
+async function loadCustomerDocRequests() {
+  const container = $("customerDocRequestsList");
+  if (!container) return;
+  const caseId = customerUi.caseId;
+  if (!caseId) {
+    container.innerHTML = '<p class="muted">Sau khi gửi hồ sơ, các yêu cầu bổ sung từ ngân hàng sẽ xuất hiện ở đây.</p>';
+    return;
+  }
+  try {
+    const reviews = await api(`/api/v2/cases/${caseId}/specialist-reviews`);
+    const needs_info = (reviews || []).filter(r => r.decision === 'needs_more_information');
+    if (!needs_info.length) {
+      container.innerHTML = '<p class="muted">Không có yêu cầu bổ sung nào từ ngân hàng.</p>';
+      return;
+    }
+    container.innerHTML = needs_info.map(r => `
+      <div style="padding:8px;border:1px solid var(--line,#e2e8f0);border-radius:6px;margin-bottom:8px;border-left:4px solid #f59e0b;">
+        <b style="color:#92400e;">📋 Yêu cầu bổ sung hồ sơ</b>
+        <p style="margin:4px 0;font-size:12.5px;">${esc(r.summary)}</p>
+        ${(r.required_information || []).length ? `<ul style="margin:4px 0;font-size:12px;">${r.required_information.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+        <small style="color:var(--muted,#64748b);">Bởi ${esc(r.reviewer_employee_id)} lúc ${esc(new Date(r.created_at).toLocaleString('vi-VN'))}</small>
+      </div>
+    `).join('');
+  } catch (err) {
+    container.innerHTML = `<p class="muted">Không tải được yêu cầu: ${esc(err.message)}</p>`;
+  }
+}
+
 
 function creditRequestPayload(){
   return {
@@ -1163,23 +1227,36 @@ async function loadNextBestWorkQueue() {
 }
 
 async function loadSpecialistQueue() {
+  const container = $("specQueueList");
+  if (!container) return;
+  container.innerHTML = '<p class="muted">Đang tải hàng đợi...</p>';
   try {
     const data = await api("/api/v2/me/work-queue");
     const queue = Array.isArray(data) ? data : (data?.queue || []);
-    const container = $("specQueueList");
+
     if (!queue.length) {
-      container.innerHTML = '<p class="muted">Không có hồ sơ chờ xử lý.</p>';
+      container.innerHTML = '<p class="muted">Không có hồ sơ chờ xử lý trong hàng đợi của bạn.</p>';
       return;
     }
 
-    container.innerHTML = queue.map(item => `
-      <div class="nbw-item medium" onclick="viewSpecialistTask('${item.work_item_id}')">
-        <h4>${esc(item.title)}</h4>
-        <p>Khách hàng: <b>${esc(item.customer_id)}</b> · Trạng thái: <code>${esc(item.status)}</code></p>
-      </div>
-    `).join("");
+    const priorityClass = score => score >= 80 ? "high" : (score >= 50 ? "medium" : "low");
+    container.innerHTML = queue.map(item => {
+      const cls = priorityClass(item.priority_score || 0);
+      // Extract caseId from work_item_id for direct linking
+      const caseIdMatch = (item.work_item_id || "").match(/(?:CASE-\w+|REVIEW-NOTIFY-(CASE-\w+)-)/);
+      const linkedCaseId = caseIdMatch ? (caseIdMatch[1] || item.work_item_id) : item.work_item_id;
+      const reasonText = (item.reasons || []).slice(0, 2).join("; ");
+      return `
+        <div class="nbw-item ${cls}" onclick="viewSpecialistTask('${esc(item.work_item_id)}', '${esc(linkedCaseId)}')" style="cursor:pointer;">
+          <span class="nbw-badge ${cls}">${item.priority_score || 0} pts</span>
+          <h4>${esc(item.title)}</h4>
+          <p>KH: <b>${esc(item.customer_id || "—")}</b></p>
+          ${reasonText ? `<small class="muted">${esc(reasonText)}</small>` : ""}
+        </div>
+      `;
+    }).join("");
   } catch (error) {
-    toast(`Lỗi tải Specialist queue: ${esc(error.message)}`, "error");
+    container.innerHTML = `<p class="muted">Lỗi tải queue: ${esc(error.message)}</p>`;
   }
 }
 
@@ -1327,7 +1404,7 @@ async function loadCreditHistory() {
   }
 }
 
-async function viewSpecialistTask(taskId) {
+async function viewSpecialistTask(taskId, hintCaseId) {
   try {
     const data = await api("/api/v2/me/work-queue");
     const queue = Array.isArray(data) ? data : (data?.queue || []);
@@ -1337,9 +1414,9 @@ async function viewSpecialistTask(taskId) {
     const allowedActions = item.allowed_actions || [item.recommended_action];
     const excludedActions = item.excluded_actions || [];
 
-    // Parse case_id and case_version from item_id
-    const match = taskId.match(/REVIEW-NOTIFY-(CASE-\d+)-(\d+)-/);
-    let caseId = "";
+    // Parse case_id and case_version from item_id or hint
+    const match = taskId.match(/REVIEW-NOTIFY-(CASE-[\w-]+)-(\d+)-/);
+    let caseId = hintCaseId || "";
     let caseVersion = 1;
     if (match) {
       caseId = match[1];
@@ -1484,34 +1561,55 @@ async function execSpecAction(caseId, caseVersion, taskId, reviewType) {
 async function loadManagerWorkload() {
   try {
     const data = await api("/api/v2/me/team/workload");
-    $("mgrBlockedCases").textContent = data.aggregate_metrics.blocked_cases;
-    $("mgrSlaRisks").textContent = data.aggregate_metrics.sla_risks;
-    $("mgrCohortSize").textContent = data.cohort_size;
+    const metrics = data.aggregate_metrics || {};
+    // Update basic stats
+    if ($("mgrBlockedCases")) $("mgrBlockedCases").textContent = metrics.blocked_cases ?? 0;
+    if ($("mgrSlaRisks")) $("mgrSlaRisks").textContent = metrics.sla_risks ?? 0;
+    if ($("mgrCohortSize")) $("mgrCohortSize").textContent = data.cohort_size ?? 0;
 
-    const summary = data.aggregate_metrics.ai_recommendation_utilization;
+    // Update additional stats if elements exist
+    if ($("mgrPendingReview")) $("mgrPendingReview").textContent = metrics.pending_review ?? 0;
+    if ($("mgrPendingApproval")) $("mgrPendingApproval").textContent = metrics.pending_approval ?? 0;
+    if ($("mgrTotalCases")) $("mgrTotalCases").textContent = metrics.total_cases ?? 0;
+    if ($("mgrCompletedCases")) $("mgrCompletedCases").textContent = metrics.completed_cases ?? 0;
+
+    const summary = metrics.ai_recommendation_utilization || {};
     const container = $("mgrUtilizationSummary");
+    if (!container) return;
+
+    // Specialist workload breakdown
+    const specWorkload = metrics.specialist_workload || {};
+    const specHtml = Object.keys(specWorkload).length
+      ? `<div style="margin-top:10px;"><b>Workload chuyên viên:</b><ul>${Object.entries(specWorkload).map(([role,n])=>`<li>${esc(role)}: <b>${n}</b> tác vụ</li>`).join('')}</ul></div>`
+      : '';
+
+    // Status breakdown
+    const breakdown = metrics.status_breakdown || {};
+    const breakdownHtml = Object.keys(breakdown).length
+      ? `<div style="margin-top:10px;"><b>Phân bổ trạng thái case:</b><ul>${Object.entries(breakdown).map(([s,n])=>`<li>${esc(statusLabels[s]||s)}: <b>${n}</b></li>`).join('')}</ul></div>`
+      : '';
     
     if (!summary.cohort_minimum_size_met) {
       container.innerHTML = `
         <div class="notice danger">
           <b>RỦI RO BẢO MẬT: Quy mô cohort nhỏ (${data.cohort_size} thành viên).</b><br>
           Manager Console đã kích hoạt cơ chế ẩn thông tin thói quen để bảo vệ RM. Yêu cầu tối thiểu 5 thành viên để xem báo cáo thống kê.
-        </div>
+        </div>${specHtml}${breakdownHtml}
       `;
     } else {
-      const accepted = summary.utilization_summary.accepted || 0;
-      const rejected = summary.utilization_summary.rejected || 0;
+      const accepted = (summary.utilization_summary || {}).accepted || 0;
+      const rejected = (summary.utilization_summary || {}).rejected || 0;
       const total = accepted + rejected;
       const pct = total > 0 ? Math.round((accepted / total) * 100) : 100;
-      
       container.innerHTML = `
         <div class="notice success">
           Tỷ lệ tương tác AI: <b>${pct}%</b> chấp nhận gợi ý (${accepted} Accepted, ${rejected} Rejected).
-        </div>
+        </div>${specHtml}${breakdownHtml}
       `;
     }
   } catch (error) {
-    toast(`Lỗi tải dữ liệu Manager: ${esc(error.message)}`, "error");
+    if ($("mgrUtilizationSummary")) $("mgrUtilizationSummary").innerHTML = `<div class="notice danger">Lỗi tải dữ liệu Manager: ${esc(error.message)}</div>`;
+    console.warn('Manager workload error:', error);
   }
 }
 
@@ -1715,9 +1813,12 @@ $("logoutButton").onclick = logout;
 const loginRoleHints = {
   customer: "Cổng khách hàng: gửi yêu cầu tín dụng, theo dõi tiến độ hồ sơ.",
   staff: "Chọn nhân viên giao dịch hoặc chuyên viên thẩm định bên dưới.",
-  manager: "Manager: theo dõi workload đội, chỉ xem số liệu tổng hợp.",
+  manager: "Manager: theo dõi workload đội, chỉ xem số liệu tổng hợp toàn chi nhánh.",
   "RM-999": "RM: tiếp nhận nhu cầu, chạy agent gợi ý và chuyển tờ trình phê duyệt.",
-  "SPEC-CREDIT-001": "Chuyên viên thẩm định: xem phân tích agent, ra quyết định tín dụng.",
+  "SPEC-CREDIT-001": "Chuyên viên Tín dụng: xem phân tích agent, ra quyết định tín dụng cho case PENDING_REVIEW.",
+  "SPEC-PROD-001": "Chuyên viên Sản phẩm: xem xét gợi ý sản phẩm, xác nhận hoặc điều chỉnh.",
+  "SPEC-LEGAL-001": "Chuyên viên Pháp lý: kiểm tra hồ sơ pháp lý, ra quyết định compliance.",
+  "INS-001": "Chuyên viên Bảo hiểm: xem xét điều kiện bảo hiểm tài sản và hàng hóa.",
 };
 function syncLoginStaffVisibility() {
   const isStaff = $("loginRole")?.value === "staff";

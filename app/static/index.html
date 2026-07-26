@@ -325,7 +325,10 @@
         <label id="loginStaffWrap" class="login-field" style="display:none;">Chọn nhân viên
           <select id="loginStaff">
             <option value="RM-999">RM-999 · Nhân viên giao dịch</option>
-            <option value="SPEC-CREDIT-001">SPEC-CREDIT-001 · Chuyên viên thẩm định</option>
+            <option value="SPEC-CREDIT-001">SPEC-CREDIT-001 · Chuyên viên Tín dụng</option>
+            <option value="SPEC-PROD-001">SPEC-PROD-001 · Chuyên viên Sản phẩm</option>
+            <option value="SPEC-LEGAL-001">SPEC-LEGAL-001 · Chuyên viên Pháp lý</option>
+            <option value="INS-001">INS-001 · Chuyên viên Bảo hiểm</option>
           </select>
         </label>
         <small id="loginRoleHint" class="login-role-hint"></small>
@@ -721,6 +724,13 @@
 
   <!-- SPECIALIST WORKSPACE -->
   <div id="specialistWorkspace" class="hidden">
+    <div style="padding:12px 20px;background:var(--sky,#f0f9ff);border-bottom:1px solid var(--line,#e2e8f0);display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <span style="font-size:10px;font-weight:700;color:#0284c7;letter-spacing:.08em;text-transform:uppercase;" id="specRoleBadge">CHUYÊN VIÊN</span>
+        <h2 style="margin:2px 0 0;font-size:18px;" id="specRoleTitle">Specialist Workspace</h2>
+      </div>
+      <button onclick="loadSpecialistQueue()" class="button secondary">Làm mới Queue</button>
+    </div>
     <div class="spec-grid">
       <aside class="panel">
         <span class="eyebrow">SPECIALIST WORK QUEUE</span>
@@ -798,11 +808,27 @@
       </div>
       <div class="mgr-stats-grid">
         <div class="mgr-stat-card">
-          <h3>Case đang bị Block</h3>
+          <h3>Tổng Case</h3>
+          <div class="value" id="mgrTotalCases">0</div>
+        </div>
+        <div class="mgr-stat-card">
+          <h3>Case bị Block</h3>
           <div class="value" id="mgrBlockedCases">0</div>
         </div>
         <div class="mgr-stat-card">
-          <h3>Nhiệm vụ rủi ro cao / Trễ SLA</h3>
+          <h3>Chờ Chuyên viên</h3>
+          <div class="value" id="mgrPendingReview">0</div>
+        </div>
+        <div class="mgr-stat-card">
+          <h3>Chờ Phê duyệt</h3>
+          <div class="value" id="mgrPendingApproval">0</div>
+        </div>
+        <div class="mgr-stat-card">
+          <h3>Hoàn thành</h3>
+          <div class="value" id="mgrCompletedCases">0</div>
+        </div>
+        <div class="mgr-stat-card">
+          <h3>Nhiệm vụ trễ SLA</h3>
           <div class="value" id="mgrSlaRisks">0</div>
         </div>
         <div class="mgr-stat-card">

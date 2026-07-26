@@ -1,0 +1,23 @@
+﻿
+.\.venv\Scripts\python.exe : Traceback (most recent call last):
+At line:1 char:1
++ .\.venv\Scripts\python.exe scripts\run_e2e_demo.py 2>&1 | Out-File -E ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\Users\Admin\Desktop\SHB\scripts\run_e2e_demo.py", line 119, in <module>
+============================================================
+  1. Health Check
+============================================================
+{
+  "status": "ok",
+  "version": "2.0.0",
+  "mode": "demo"
+}
+    main()
+  File "C:\Users\Admin\Desktop\SHB\scripts\run_e2e_demo.py", line 29, in main
+    r.raise_for_status()
+  File "C:\Users\Admin\Desktop\SHB\.venv\Lib\site-packages\requests\models.py", line 1167, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 422 Client Error: Unprocessable Entity for url: http://localhost:8000/api/v2/auth/login

@@ -320,41 +320,60 @@ function renderActionButtons(status){
   if($("rejectCase"))$("rejectCase").onclick=rejectCase;
 }
 
-async function forwardToSpecialist(){
+const _specialistRoleLabels={credit_specialist:"Chuyên viên Tín dụng",product_specialist:"Chuyên viên Sản phẩm",legal_specialist:"Chuyên viên Pháp lý",insurance_specialist:"Chuyên viên Bảo hiểm"};
+
+function forwardToSpecialist(){
   if(!ui.caseId){toast("Chưa có case nào đang mở.","error");return;}
-  const note=prompt("Nhập nội dung ghi chú chuyển Chuyên viên thẩm định:","Kính gửi Chuyên viên, vui lòng xem xét và ra quyết định.");
-  if(!note)return;
-  // Tạo work_item để Specialist thấy trong queue:
-  // Chỉ RM gọi endpoint này để push notification vào NBW của Specialist.
-  // Backend sẽ tự resolve review_type theo risk_gate_result của case.
-  // Nếu case chưa PENDING_REVIEW, chúng ta fallback sang tạo work item qua note.
-  toast(`⏳ Đang chuyển case ${esc(ui.caseId)} tới chuyên viên...`,"warning");
+  document.getElementById("forwardSpecialistForm")?.remove();
+  const suggested=ui.runtime?.risk_gate_result?.required_reviewer_roles?.[0]||"credit_specialist";
+  $("actionButtons").insertAdjacentHTML("beforeend",`
+    <div class="approval-preview" id="forwardSpecialistForm">
+      <b>Chuyển case cho Chuyên viên kiểm tra</b>
+      <label class="field" style="margin-top:8px;">Chuyên viên phụ trách
+        <select id="fwdSpecialistRole">
+          ${Object.entries(_specialistRoleLabels).map(([value,label])=>`<option value="${value}" ${value===suggested?"selected":""}>${esc(label)}</option>`).join("")}
+        </select>
+      </label>
+      <label class="field" style="margin-top:8px;">Lý do / ghi chú cho chuyên viên
+        <textarea id="fwdReason" rows="2">Kính gửi Chuyên viên, vui lòng xem xét và ra quyết định.</textarea>
+      </label>
+      <label class="field" style="margin-top:8px;">Độ ưu tiên
+        <select id="fwdPriority"><option value="high">Cao</option><option value="medium" selected>Trung bình</option><option value="low">Thấp</option></select>
+      </label>
+      <div id="fwdFormError" class="notice danger hidden" style="margin-top:8px;"></div>
+      <div class="button-row" style="margin-top:10px;">
+        <button type="button" class="button primary" id="fwdSubmitBtn">Gửi</button>
+        <button type="button" class="button ghost" id="fwdCancelBtn">Hủy</button>
+      </div>
+    </div>
+  `);
+  $("fwdCancelBtn").onclick=()=>$("forwardSpecialistForm").remove();
+  $("fwdSubmitBtn").onclick=submitForwardToSpecialist;
+  $("forwardSpecialistForm").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+async function submitForwardToSpecialist(){
+  const errBox=$("fwdFormError");
+  errBox.classList.add("hidden");
+  const specialistRole=$("fwdSpecialistRole").value;
+  const reason=$("fwdReason").value.trim();
+  const priority=$("fwdPriority").value;
+  if(reason.length<3){errBox.textContent="Vui lòng nhập lý do (ít nhất 3 ký tự).";errBox.classList.remove("hidden");return}
+  $("fwdSubmitBtn").disabled=true;
   try{
-    // Try posting a specialist review notification (works when case is PENDING_REVIEW)
-    const reviewType = ui.runtime?.risk_gate_result?.required_reviewer_roles?.[0] || "credit_specialist";
-    await api(`/api/v2/cases/${ui.caseId}/specialist-reviews`,{
+    const result=await api(`/api/v2/cases/${ui.caseId}/forward-to-specialist`,{
       method:"POST",
-      body:JSON.stringify({
-        review_type: reviewType,
-        decision:"needs_more_information",
-        summary:note,
-        findings:[note],
-        required_information:[],
-        evidence_ids:[],
-        expected_case_version: ui.stateVersion
-      })
+      body:JSON.stringify({specialist_role:specialistRole,reason,evidence_refs:[],priority})
     });
-    await loadSpecialistReviews(ui.caseId);
-    toast(`✓ Đã chuyển case <b>${esc(ui.caseId)}</b> tới Chuyên viên. Khi đăng nhập vai trò Chuyên viên sẽ thấy yêu cầu này trong NBW Queue.`,"success");
+    $("forwardSpecialistForm").remove();
+    toast(`✓ Đã chuyển case <b>${esc(ui.caseId)}</b> cho ${esc(_specialistRoleLabels[specialistRole]||specialistRole)}. WorkItem: <code>${esc(result.work_item_id)}</code>.`,"success");
     await loadCases();
+    await loadMyNotifications();
   }catch(error){
-    // Fallback: show guidance even if API call failed
-    const errMsg = error?.detail?.message || error.message || "";
-    if(errMsg.includes("CASE_NOT_PENDING_REVIEW")){
-      toast(`⚠ Case chưa ở trạng thái PENDING_REVIEW. Hãy chạy phân tích trước, sau đó bấm "Chuyển Chuyên viên" khi kết quả yêu cầu review.`,"warning");
-    } else {
-      toast(`✓ Đã ghi nhận chuyển Chuyên viên. Chuyên viên sẽ thấy case trong queue khi case đạt trạng thái PENDING_REVIEW.`,"success");
-    }
+    // Real backend error, shown verbatim -- the form stays open so the user can fix and retry.
+    errBox.textContent=`${error.code||"LỖI"}: ${error.message}`;
+    errBox.classList.remove("hidden");
+    $("fwdSubmitBtn").disabled=false;
   }
 }
 
@@ -370,8 +389,19 @@ async function rejectCase(){
 function renderEvidence(items){$("evidenceList").innerHTML=items.map(item=>`<div class="evidence"><b>${esc(item.claim)}</b><span>${esc(item.source_document_id)} · ${esc(item.source_version)}</span><small>${esc(item.location)} · validation ${Math.round((item.validation_score||0)*100)}%</small></div>`).join("")||'<p class="muted">Chưa có nguồn.</p>'}
 function renderAiLog(entries){$("summaryAiLog").textContent=`${entries.length} bản ghi`;$("aiLog").innerHTML=entries.map(item=>`<div class="log-entry"><b>${esc(item.component)} · ${esc(item.event)}</b><span>${esc(item.mode)} · ${esc(item.model)} · ${item.latency_ms||0} ms</span><small>${esc(item.prompt_or_policy_version)} · ${item.sources?.length||0} nguồn · ${item.token_usage?.total||0} token</small></div>`).join("")||'<p class="muted">Chưa có AI log.</p>'}
 function renderAudit(events,valid){$("auditLog").innerHTML=`<div class="notice ${valid?"success":"danger"}">Hash-chain: <b>${valid?"HỢP LỆ":"KHÔNG HỢP LỆ"}</b></div>`+events.map(item=>`<div class="log-entry"><b>${esc(item.action)}</b><span>${esc(item.actor)} · ${esc(item.created_at||item.at)}</span><small>${esc(item.event_hash||"")}</small></div>`).join("")}
+function renderTimeline(events){
+  const el=$("timelineLog");
+  if(!el)return;
+  el.innerHTML=events.length?events.map(item=>`<div class="log-entry"><b>${esc(item.event_type)}</b><span>${esc(item.actor_role)}/${esc(item.actor_id)} · ${esc(new Date(item.created_at).toLocaleString("vi-VN"))}</span><small>${esc(item.title)}${item.description?` — ${esc(item.description)}`:""}</small></div>`).join(""):'<p class="muted">Chưa có sự kiện timeline thật cho case này (bảng timeline_events chỉ ghi từ khi tính năng P0 workflow được bật).</p>';
+}
 function renderControlLogs(evidence,ai,audit){renderEvidence(evidence);renderAiLog(ai);renderAudit(audit,true)}
-async function loadControlLogs(){if(!ui.caseId||!ui.runtime)return;try{const [ai,audit]=await Promise.all([api(`/api/v2/sales-cases/${ui.caseId}/ai-log`),api(`/api/v2/sales-cases/${ui.caseId}/audit`)]);renderAiLog(ai.entries||[]);renderAudit(audit.events||[],audit.chain_valid)}catch(error){toast(`Không tải được log: ${esc(error.message)}`,"error")}}
+async function loadControlLogs(){
+  if(!ui.caseId||!ui.runtime)return;
+  try{const [ai,audit]=await Promise.all([api(`/api/v2/sales-cases/${ui.caseId}/ai-log`),api(`/api/v2/sales-cases/${ui.caseId}/audit`)]);renderAiLog(ai.entries||[]);renderAudit(audit.events||[],audit.chain_valid)}
+  catch(error){toast(`Không tải được log: ${esc(error.message)}`,"error")}
+  try{const timeline=await api(`/api/v2/cases/${ui.caseId}/timeline`);renderTimeline(timeline||[])}
+  catch(error){renderTimeline([])}
+}
 async function previewApproval(){try{const data=await api(`/api/v2/sales-cases/${ui.caseId}/approval-preview`,{method:"POST"});ui.previewHash=data.payload_hash;$("actionButtons").insertAdjacentHTML("beforeend",`<div class="approval-preview"><b>Payload hash</b><small>${esc(data.payload_hash)}</small><pre>${esc(JSON.stringify(data.payload,null,2))}</pre></div>`);toast("Đã hiển thị đúng payload được khóa cho approval.","warning")}catch(error){toast(esc(error.message),"error")}}
 async function approveAction(){
   try{
@@ -507,6 +537,7 @@ async function loadEmployeeContext() {
     // Route by role
     const role = data.authorization_context?.roles?.[0];
     routeWorkspace(role);
+    await loadMyNotifications();
 
     const roleLabel = { customer_user:"Người dùng", relationship_manager:"Nhân viên giao dịch", legal_specialist:"Legal/Compliance Reviewer", product_specialist:"Product Specialist", credit_specialist:"Chuyên viên thẩm định", insurance_specialist:"Insurance Specialist", manager:"Người phê duyệt cuối" }[role] || role;
     $("roleBadge").textContent = `Role: ${roleLabel}`;
@@ -542,6 +573,7 @@ function hideAllWorkspaces() {
   $("managerWorkspace").classList.add("hidden");
   $("personalizationPanel").classList.add("hidden");
   const hw = $("habitsPanelWrapper"); if(hw) hw.classList.add("hidden");
+  const nb = $("notificationsBar"); if(nb) nb.classList.add("hidden");
 }
 
 function routeWorkspace(role) {
@@ -721,31 +753,111 @@ async function loadCustomerCases(){
   }catch(error){toast(`Không tải được hồ sơ đã gửi: ${esc(error.message)}`,"error")}
 }
 
+const _docRequestStatusVi = {
+  REQUESTED: "Đang chờ bạn bổ sung", SUBMITTED: "Đã gửi — đang chờ xem xét",
+  PROCESSING: "Đang xử lý", VERIFIED: "Đã xác nhận", REJECTED: "Bị từ chối", CANCELLED: "Đã hủy",
+};
+
 async function loadCustomerDocRequests() {
+  // Real backend data (GET /api/v2/customer/document-requests) -- independent
+  // of customerUi.caseId (in-memory only), so this also covers "customer
+  // resumes after logout/login": the list comes fresh from the server every
+  // time this runs, keyed off the identity's own customer_scope.
   const container = $("customerDocRequestsList");
   if (!container) return;
-  const caseId = customerUi.caseId;
-  if (!caseId) {
-    container.innerHTML = '<p class="muted">Sau khi gửi hồ sơ, các yêu cầu bổ sung từ ngân hàng sẽ xuất hiện ở đây.</p>';
-    return;
-  }
   try {
-    const reviews = await api(`/api/v2/cases/${caseId}/specialist-reviews`);
-    const needs_info = (reviews || []).filter(r => r.decision === 'needs_more_information');
-    if (!needs_info.length) {
+    const requests = await api("/api/v2/customer/document-requests");
+    if (!requests.length) {
       container.innerHTML = '<p class="muted">Không có yêu cầu bổ sung nào từ ngân hàng.</p>';
       return;
     }
-    container.innerHTML = needs_info.map(r => `
-      <div style="padding:8px;border:1px solid var(--line,#e2e8f0);border-radius:6px;margin-bottom:8px;border-left:4px solid #f59e0b;">
-        <b style="color:#92400e;">📋 Yêu cầu bổ sung hồ sơ</b>
-        <p style="margin:4px 0;font-size:12.5px;">${esc(r.summary)}</p>
-        ${(r.required_information || []).length ? `<ul style="margin:4px 0;font-size:12px;">${r.required_information.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-        <small style="color:var(--muted,#64748b);">Bởi ${esc(r.reviewer_employee_id)} lúc ${esc(new Date(r.created_at).toLocaleString('vi-VN'))}</small>
+    const open = requests.filter(r => r.status === "REQUESTED" || r.status === "PROCESSING");
+    const resolved = requests.filter(r => r.status !== "REQUESTED" && r.status !== "PROCESSING");
+    const openHtml = open.length ? open.map(r => `
+      <div style="padding:10px;border:1px solid var(--line,#e2e8f0);border-radius:8px;margin-bottom:10px;border-left:4px solid #f59e0b;">
+        <b style="color:#92400e;">📋 ${esc(r.title)}</b>
+        <p style="margin:4px 0;font-size:12.5px;">${esc(r.customer_safe_reason)}</p>
+        <small style="color:var(--muted,#64748b);display:block;margin-bottom:8px;">Yêu cầu lúc ${esc(new Date(r.created_at).toLocaleString("vi-VN"))} · ${esc(_docRequestStatusVi[r.status] || r.status)}</small>
+        <button type="button" class="button primary" onclick="startDocumentReplacementUpload('${r.request_id}','${r.case_id}')">Tải lên hồ sơ thay thế</button>
       </div>
-    `).join('');
+    `).join("") : '<p class="muted">Không có yêu cầu nào đang chờ bổ sung.</p>';
+    const historyHtml = resolved.length ? `
+      <details style="margin-top:8px;">
+        <summary class="muted" style="cursor:pointer;font-size:12px;">Lịch sử (${resolved.length})</summary>
+        ${resolved.map(r => `<div style="padding:6px 0;font-size:12px;border-top:1px solid var(--line,#e2e8f0);"><b>${esc(r.title)}</b> · ${esc(_docRequestStatusVi[r.status] || r.status)}</div>`).join("")}
+      </details>` : "";
+    container.innerHTML = openHtml + historyHtml;
   } catch (err) {
     container.innerHTML = `<p class="muted">Không tải được yêu cầu: ${esc(err.message)}</p>`;
+  }
+}
+
+let _pendingDocReplacement = null;
+
+function startDocumentReplacementUpload(requestId, caseId) {
+  _pendingDocReplacement = { requestId, caseId };
+  const input = $("customerDocReplacementInput");
+  input.value = "";
+  input.click();
+}
+
+async function handleDocumentReplacementFile() {
+  const input = $("customerDocReplacementInput");
+  const file = input.files && input.files[0];
+  if (!file || !_pendingDocReplacement) return;
+  const { requestId, caseId } = _pendingDocReplacement;
+  _pendingDocReplacement = null;
+  toast(`Đang tải lên ${esc(file.name)}...`, "warning");
+  try {
+    const form = new FormData();
+    form.append("files", file);
+    const uploadResult = await api(`/api/v2/sales-cases/${caseId}/documents`, { method: "POST", body: form });
+    await api(`/api/v2/sales-cases/${caseId}/process-documents`, { method: "POST" });
+    const newDoc = (uploadResult.documents || [])[uploadResult.documents.length - 1];
+    if (!newDoc) throw new Error("Không nhận được document_id sau khi upload.");
+    await api(`/api/v2/document-requests/${requestId}/submit`, {
+      method: "POST", body: JSON.stringify({ document_id: newDoc.document_id }),
+    });
+    toast("Đã gửi hồ sơ thay thế. Chuyên viên sẽ xem xét lại.", "success");
+    await loadCustomerDocRequests();
+    await loadCustomerCreditRequests();
+  } catch (error) {
+    toast(`<b>${esc(error.code || "LỖI")}:</b> ${esc(error.message)}`, "error");
+  }
+}
+
+async function loadMyNotifications() {
+  const bar = $("notificationsBar");
+  if (!bar) return;
+  try {
+    const items = await api("/api/v2/me/notifications");
+    bar.classList.remove("hidden");
+    const unread = items.filter(n => !n.read_at);
+    $("notifUnreadCount").textContent = unread.length;
+    $("notifUnreadCount").className = `status-pill ${unread.length ? "amber" : "neutral"}`;
+    const list = $("notificationsList");
+    if (!items.length) {
+      list.innerHTML = '<p class="muted">Chưa có thông báo.</p>';
+      return;
+    }
+    list.innerHTML = items.slice(0, 20).map(n => `
+      <div style="padding:8px 0;border-bottom:1px solid var(--line,#e2e8f0);font-size:12.5px;cursor:pointer;${n.read_at ? "opacity:.6;" : ""}" onclick="markNotificationRead('${n.notification_id}')">
+        <b>${esc(n.title)}</b>${n.read_at ? "" : ' <span class="chip" style="font-size:8px;">MỚI</span>'}<br>
+        <span>${esc(n.message)}</span><br>
+        <small class="muted">${esc(new Date(n.created_at).toLocaleString("vi-VN"))}</small>
+      </div>
+    `).join("");
+  } catch (error) {
+    console.warn("Could not load notifications", error);
+  }
+}
+
+async function markNotificationRead(notificationId) {
+  try {
+    await api(`/api/v2/notifications/${notificationId}/read`, { method: "POST" });
+    await loadMyNotifications();
+  } catch (error) {
+    console.warn("Could not mark notification read", error);
   }
 }
 
@@ -832,7 +944,7 @@ function creditAgentBlocksHtml(row,{showInternal=true}={}){
     <fieldset class="credit-section">
       <legend>Tài liệu đính kèm (Từ luồng Nhu cầu)</legend>
       <div style="display:flex; flex-wrap:wrap; gap:8px;">
-        ${row.sales_case_documents.map(d=>`<span class="badge" style="background:#e0f2fe; color:#0369a1; padding:4px 8px; border-radius:4px; font-size:12px;">📄 ${esc(d.name)}</span>`).join("")}
+        ${row.sales_case_documents.map(d=>`<span class="badge" style="background:#e0f2fe; color:#0369a1; padding:4px 8px; border-radius:4px; font-size:12px;">📄 ${esc(d.filename)}</span>`).join("")}
       </div>
     </fieldset>` : "";
     
@@ -904,13 +1016,27 @@ function creditStaffActionsHtml(row,role){
   if(role==="credit_specialist" && row.status==="PendingAppraisal"){
     return `<div class="credit-approval-actions">
       <textarea id="creditSharedAppraisalReason" placeholder="Nhận xét thẩm định của chuyên viên..." aria-label="Nhận xét thẩm định"></textarea>
+      <input id="creditRequestedDocType" placeholder="Loại hồ sơ cần bổ sung nếu chọn 'Yêu cầu RM bổ sung' (mặc định: BCTC)" aria-label="Loại hồ sơ cần bổ sung">
       <button class="button primary" type="button" onclick="appraiseCreditRequest('${row.request_id}','recommend')">Đề nghị trình phê duyệt</button>
       <button class="button secondary" type="button" onclick="appraiseCreditRequest('${row.request_id}','needs_more_information')">Yêu cầu RM bổ sung</button>
       <button class="button danger" type="button" onclick="appraiseCreditRequest('${row.request_id}','not_recommended')">Không đề nghị</button>
     </div>`;
   }
-  if(role==="manager" && row.status==="PendingFinalApproval"){
+  if(role==="relationship_manager" && row.status==="PendingFinalApproval"){
+    if(row.proposal_created_at){
+      return `<div class="notice success">Đã tạo proposal lúc ${esc(new Date(row.proposal_created_at).toLocaleString("vi-VN"))}. Đang chờ Manager phê duyệt.</div>`;
+    }
     return `<div class="credit-approval-actions">
+      <textarea id="creditProposalNote" placeholder="Ghi chú kèm proposal cho Manager (tuỳ chọn)" aria-label="Ghi chú proposal"></textarea>
+      <button class="button primary" type="button" onclick="createCreditProposal('${row.request_id}',this)">Tạo Proposal trình Manager →</button>
+    </div>`;
+  }
+  if(role==="manager" && row.status==="PendingFinalApproval"){
+    if(!row.proposal_created_at){
+      return `<div class="notice warning">RM chưa tạo Proposal cho tờ trình này. Chưa thể phê duyệt.</div>`;
+    }
+    return `<div class="notice success" style="margin-bottom:10px;">Proposal do RM tạo lúc ${esc(new Date(row.proposal_created_at).toLocaleString("vi-VN"))}${row.proposal_note?`: "${esc(row.proposal_note)}"`:""}</div>
+    <div class="credit-approval-actions">
       <textarea id="creditSharedReason" placeholder="Lý do quyết định cuối của Manager..." aria-label="Lý do quyết định"></textarea>
       <button class="button primary" type="button" onclick="decideCreditRequest('${row.request_id}','approved')">Phê duyệt giải ngân</button>
       <button class="button secondary" type="button" onclick="decideCreditRequest('${row.request_id}','needs_more_information')">Trả lại thẩm định</button>
@@ -918,6 +1044,22 @@ function creditStaffActionsHtml(row,role){
     </div>`;
   }
   return `<p class="muted">Không có thao tác cho trạng thái ${esc(row.status)}.</p>`;
+}
+
+async function createCreditProposal(requestId,btn){
+  const note=($("creditProposalNote")?.value||"").trim();
+  if(btn)btn.disabled=true;
+  try{
+    await api(`/api/v2/credit-requests/${requestId}/proposal`,{
+      method:"POST",
+      headers:{"Idempotency-Key":`credit-proposal-${requestId}-${Date.now()}`},
+      body:JSON.stringify({note})
+    });
+    toast(`Đã tạo Proposal cho ${esc(requestId)}. Manager sẽ nhận thông báo phê duyệt.`,"success");
+    await loadRmCreditForwardQueue();
+    await loadMyNotifications();
+  }catch(error){toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error")}
+  finally{if(btn)btn.disabled=false}
 }
 
 function showCustomerAgentOnForm(row){
@@ -1139,6 +1281,7 @@ async function decideCreditRequest(requestId,decision){
       body:JSON.stringify({decision,reason})
     });
     await loadManagerApprovalRequests();
+    await loadMyNotifications();
     toast(`Đã lưu quyết định ${esc(decision)} trên form ${esc(requestId)}.`);
   }catch(error){toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error")}
 }
@@ -1146,14 +1289,21 @@ async function decideCreditRequest(requestId,decision){
 async function appraiseCreditRequest(requestId,recommendation){
   const reason=($("creditSharedAppraisalReason")?.value||"").trim();
   if(reason.length<5)return toast("Hãy nhập nhận xét thẩm định (ít nhất 5 ký tự).","warning");
+  const payload={recommendation,reason};
+  if(recommendation==="needs_more_information"){
+    payload.requested_document_type=($("creditRequestedDocType")?.value||"").trim()||"financial_statement";
+  }
   try{
     await api(`/api/v2/credit-requests/${requestId}/appraisal`,{
       method:"POST",
       headers:{"Idempotency-Key":`credit-appraisal-${requestId}-${Date.now()}`},
-      body:JSON.stringify({recommendation,reason})
+      body:JSON.stringify(payload)
     });
     await loadCreditApprovalRequests();
-    toast("Đã lưu thẩm định; Agent đã tạo khuyến nghị giải ngân để Manager xem xét.");
+    await loadMyNotifications();
+    toast(recommendation==="needs_more_information"
+      ?"Đã ghi nhận yêu cầu bổ sung hồ sơ; Khách hàng sẽ nhận được yêu cầu này."
+      :"Đã lưu thẩm định; Agent đã tạo khuyến nghị giải ngân để Manager xem xét.");
   }catch(error){toast(`<b>${esc(error.code)}:</b> ${esc(error.message)}`,"error")}
 }
 
@@ -1226,35 +1376,33 @@ async function loadNextBestWorkQueue() {
   }
 }
 
+let _specWorkItemsCache = [];
+
 async function loadSpecialistQueue() {
+  // Real, DB-backed queue (GET /api/v2/work-items/my) -- every row comes
+  // from employee_work_items, never a JavaScript fixture. Distinguishes
+  // demo-seed rows (is_demo_seed) from genuinely triggered ones instead of
+  // hiding the seed data outright.
   const container = $("specQueueList");
   if (!container) return;
   container.innerHTML = '<p class="muted">Đang tải hàng đợi...</p>';
   try {
-    const data = await api("/api/v2/me/work-queue");
-    const queue = Array.isArray(data) ? data : (data?.queue || []);
+    const items = await api("/api/v2/work-items/my");
+    _specWorkItemsCache = items;
 
-    if (!queue.length) {
-      container.innerHTML = '<p class="muted">Không có hồ sơ chờ xử lý trong hàng đợi của bạn.</p>';
+    if (!items.length) {
+      container.innerHTML = '<p class="muted">Hiện không có hồ sơ nào cần bạn xử lý.</p>';
       return;
     }
 
-    const priorityClass = score => score >= 80 ? "high" : (score >= 50 ? "medium" : "low");
-    container.innerHTML = queue.map(item => {
-      const cls = priorityClass(item.priority_score || 0);
-      // Extract caseId from work_item_id for direct linking
-      const caseIdMatch = (item.work_item_id || "").match(/(?:CASE-\w+|REVIEW-NOTIFY-(CASE-\w+)-)/);
-      const linkedCaseId = caseIdMatch ? (caseIdMatch[1] || item.work_item_id) : item.work_item_id;
-      const reasonText = (item.reasons || []).slice(0, 2).join("; ");
-      return `
-        <div class="nbw-item ${cls}" onclick="viewSpecialistTask('${esc(item.work_item_id)}', '${esc(linkedCaseId)}')" style="cursor:pointer;">
-          <span class="nbw-badge ${cls}">${item.priority_score || 0} pts</span>
-          <h4>${esc(item.title)}</h4>
-          <p>KH: <b>${esc(item.customer_id || "—")}</b></p>
-          ${reasonText ? `<small class="muted">${esc(reasonText)}</small>` : ""}
-        </div>
-      `;
-    }).join("");
+    container.innerHTML = items.map(item => `
+      <div class="nbw-item ${esc(item.priority)}" onclick="viewSpecialistTask('${esc(item.work_item_id)}')" style="cursor:pointer;">
+        <span class="nbw-badge ${esc(item.priority)}">${esc(item.status)}${item.is_demo_seed ? " · SEED" : ""}</span>
+        <h4>${esc(item.company_name || "—")}</h4>
+        <p>${esc(item.trigger_reason)}</p>
+        <small class="muted">${esc(item.work_item_type)} · ${esc(item.evidence_summary)} · ${esc(new Date(item.created_at).toLocaleString("vi-VN"))}</small>
+      </div>
+    `).join("");
   } catch (error) {
     container.innerHTML = `<p class="muted">Lỗi tải queue: ${esc(error.message)}</p>`;
   }
@@ -1404,67 +1552,59 @@ async function loadCreditHistory() {
   }
 }
 
-async function viewSpecialistTask(taskId, hintCaseId) {
-  try {
-    const data = await api("/api/v2/me/work-queue");
-    const queue = Array.isArray(data) ? data : (data?.queue || []);
-    const item = queue.find(x => x.work_item_id === taskId);
-    if (!item) return;
+async function viewSpecialistTask(workItemId) {
+  const item = _specWorkItemsCache.find(x => x.work_item_id === workItemId);
+  if (!item) return;
 
-    const allowedActions = item.allowed_actions || [item.recommended_action];
-    const excludedActions = item.excluded_actions || [];
-
-    // Parse case_id and case_version from item_id or hint
-    const match = taskId.match(/REVIEW-NOTIFY-(CASE-[\w-]+)-(\d+)-/);
-    let caseId = hintCaseId || "";
-    let caseVersion = 1;
-    if (match) {
-      caseId = match[1];
-      caseVersion = Number(match[2]);
-    }
-
-    let contextHtml = "";
-    let reviewContext = null;
-
-    if (caseId) {
-      try {
-        reviewContext = await api(`/api/v2/cases/${caseId}/review-context`);
-        if (reviewContext) {
-          const reasonsList = (reviewContext.reasons || []).map(r => `<li><code>${esc(r)}</code></li>`).join("");
-          const rulesList = (reviewContext.triggered_rules || []).map(r => `<li>Rule ID: <code>${esc(r)}</code></li>`).join("");
-          
-          contextHtml = `
-            <div class="panel" style="margin-top:12px; padding:12px; border-left:4px solid var(--amber);">
-              <h3>Bối cảnh Hồ sơ & Quy tắc bị chặn</h3>
-              <p>Mã hồ sơ: <b>${esc(caseId)}</b> (Phiên bản: ${caseVersion})</p>
-              <ul>
-                ${reasonsList || "<li>Không tìm thấy lý do chặn cụ thể.</li>"}
-              </ul>
-              ${rulesList ? `<h4>Quy tắc kích hoạt:</h4><ul>${rulesList}</ul>` : ""}
-            </div>
-          `;
-        }
-      } catch (err) {
-        contextHtml = `<div class="notice danger">Không tải được chi tiết bối cảnh: ${esc(err.message)}</div>`;
-      }
-    }
-
-    // Determine current specialist role to prefill
-    const currentEmp = $("employee").value;
-    let reviewType = "legal_specialist";
-    if (currentEmp.includes("CREDIT")) reviewType = "credit_specialist";
-    if (currentEmp.includes("INSURANCE")) reviewType = "insurance_specialist";
-
+  if (!item.case_id) {
     $("specDetailPanel").innerHTML = `
-      <h2>Chi tiết nhiệm vụ Chuyên viên</h2>
-
-      <div class="notice success" style="margin-top:10px;">
-        <h3 style="margin:0 0 6px 0;">${esc(item.title)}</h3>
-        <p style="margin:2px 0">Khách hàng: <b>${esc(item.customer_id)}</b></p>
-        <p style="margin:2px 0">Độ ưu tiên: <b>${item.priority_score} điểm</b> · Band P${item.priority_band}</p>
+      <h2>${esc(item.company_name || "Nhiệm vụ")}</h2>
+      <div class="notice warning">
+        <b>Không xác định được case cụ thể cho nhiệm vụ này.</b><br>
+        Mã nhiệm vụ <code>${esc(item.work_item_id)}</code> chưa gắn với một case thật
+        (thường là dữ liệu demo seed ban đầu, chưa có hoạt động thật nào tạo ra nó).
       </div>
+      <p>${esc(item.trigger_reason)}</p>
+    `;
+    return;
+  }
 
-      ${contextHtml}
+  const caseId = item.case_id;
+  let contextHtml = "";
+  let caseVersion = null;
+
+  try {
+    const reviewContext = await api(`/api/v2/cases/${caseId}/review-context`);
+    caseVersion = reviewContext.case_version;
+    const reasonsList = (reviewContext.reasons || []).map(r => `<li><code>${esc(r)}</code></li>`).join("");
+    const rulesList = (reviewContext.triggered_rules || []).map(r => `<li>Rule ID: <code>${esc(r)}</code></li>`).join("");
+    contextHtml = `
+      <div class="panel" style="margin-top:12px; padding:12px; border-left:4px solid var(--amber);">
+        <h3>Bối cảnh Hồ sơ & Quy tắc bị chặn</h3>
+        <p>Mã hồ sơ: <b>${esc(caseId)}</b> (Phiên bản: ${caseVersion})</p>
+        <ul>
+          ${reasonsList || "<li>Không tìm thấy lý do chặn cụ thể.</li>"}
+        </ul>
+        ${rulesList ? `<h4>Quy tắc kích hoạt:</h4><ul>${rulesList}</ul>` : ""}
+      </div>
+    `;
+  } catch (err) {
+    contextHtml = `<div class="notice warning">Case chưa (hoặc không còn) ở trạng thái chờ review chuyên viên: ${esc(err.message)}</div>`;
+  }
+
+  const reviewType = item.assigned_role || "legal_specialist";
+
+  $("specDetailPanel").innerHTML = `
+    <h2>Chi tiết nhiệm vụ Chuyên viên</h2>
+
+    <div class="notice success" style="margin-top:10px;">
+      <h3 style="margin:0 0 6px 0;">${esc(item.company_name || caseId)}</h3>
+      <p style="margin:2px 0">Lý do chuyển: <b>${esc(item.trigger_reason)}</b></p>
+      <p style="margin:2px 0">Độ ưu tiên: <b>${esc(item.priority)}</b> · Trạng thái: ${esc(item.status)}</p>
+      ${item.deep_link ? `<p style="margin:2px 0"><a href="#" onclick="return false;"><code>${esc(item.deep_link)}</code></a></p>` : ""}
+    </div>
+
+    ${contextHtml}
 
       <div class="panel" style="margin-top:12px; padding:16px;">
         <h3>Đưa ra quyết định phê duyệt chuyên môn</h3>
@@ -1492,7 +1632,7 @@ async function viewSpecialistTask(taskId, hintCaseId) {
           </label>
         </div>
 
-        <button class="button primary" style="margin-top:16px; width:100%;" onclick="execSpecAction('${caseId}', ${caseVersion}, '${taskId}', '${reviewType}')">
+        <button class="button primary" style="margin-top:16px; width:100%;" onclick="execSpecAction('${caseId}', ${caseVersion === null ? "null" : caseVersion}, '${workItemId}', '${reviewType}')">
           Gửi quyết định phê duyệt
         </button>
       </div>
@@ -1503,9 +1643,6 @@ async function viewSpecialistTask(taskId, hintCaseId) {
     $("specDecision").onchange = (e) => {
       $("infoGapInput").classList.toggle("hidden", e.target.value !== "needs_more_information");
     };
-  } catch (error) {
-    toast(`Lỗi khi xem chi tiết task: ${esc(error.message)}`, "error");
-  }
 }
 
 async function execSpecAction(caseId, caseVersion, taskId, reviewType) {
@@ -1737,11 +1874,11 @@ async function deletePersonalizationHabit() {
 }
 
 function switchControlTab(tabName) {
-  const normalized = ["evidence", "ai", "audit", "json"].includes(tabName) ? tabName : "evidence";
+  const normalized = ["evidence", "ai", "audit", "timeline", "json"].includes(tabName) ? tabName : "evidence";
   document.querySelectorAll(".control-panel .tab").forEach(button => {
     button.classList.toggle("active", button.dataset.tab === normalized);
   });
-  ["Evidence", "Ai", "Audit", "Json"].forEach(name => {
+  ["Evidence", "Ai", "Audit", "Timeline", "Json"].forEach(name => {
     const panel = $("tab" + name);
     if (panel) panel.classList.toggle("hidden", name.toLowerCase() !== normalized);
   });
@@ -1803,6 +1940,7 @@ function bindWorkspaceEvents() {
     renderCustomerPendingFiles();
   };
   $("customerUpload").onclick = uploadCustomerDocuments;
+  if ($("customerDocReplacementInput")) $("customerDocReplacementInput").onchange = handleDocumentReplacementFile;
 }
 
 // Bind SSO switcher event
@@ -1818,7 +1956,7 @@ const loginRoleHints = {
   "SPEC-CREDIT-001": "Chuyên viên Tín dụng: xem phân tích agent, ra quyết định tín dụng cho case PENDING_REVIEW.",
   "SPEC-PROD-001": "Chuyên viên Sản phẩm: xem xét gợi ý sản phẩm, xác nhận hoặc điều chỉnh.",
   "SPEC-LEGAL-001": "Chuyên viên Pháp lý: kiểm tra hồ sơ pháp lý, ra quyết định compliance.",
-  "INS-001": "Chuyên viên Bảo hiểm: xem xét điều kiện bảo hiểm tài sản và hàng hóa.",
+  "SPEC-INSURANCE-001": "Chuyên viên Bảo hiểm: xem xét điều kiện bảo hiểm tài sản và hàng hóa.",
 };
 function syncLoginStaffVisibility() {
   const isStaff = $("loginRole")?.value === "staff";

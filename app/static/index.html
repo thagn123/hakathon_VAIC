@@ -328,7 +328,7 @@
             <option value="SPEC-CREDIT-001">SPEC-CREDIT-001 · Chuyên viên Tín dụng</option>
             <option value="SPEC-PROD-001">SPEC-PROD-001 · Chuyên viên Sản phẩm</option>
             <option value="SPEC-LEGAL-001">SPEC-LEGAL-001 · Chuyên viên Pháp lý</option>
-            <option value="INS-001">INS-001 · Chuyên viên Bảo hiểm</option>
+            <option value="SPEC-INSURANCE-001">SPEC-INSURANCE-001 · Chuyên viên Bảo hiểm</option>
           </select>
         </label>
         <small id="loginRoleHint" class="login-role-hint"></small>
@@ -367,6 +367,18 @@
   </header>
 
   <div id="toast" class="toast hidden" role="status"></div>
+
+  <!-- NOTIFICATIONS -- real, DB-backed, scoped to whichever identity is logged in. -->
+  <div id="notificationsBar" class="hidden" style="max-width:1780px;margin:10px auto 0;padding:0 16px;">
+    <details id="notificationsDetails">
+      <summary style="cursor:pointer;background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:700;color:var(--navy,#09284a);">
+        🔔 Thông báo <span id="notifUnreadCount" class="status-pill neutral" style="margin-left:6px;">0</span>
+      </summary>
+      <div id="notificationsList" style="background:#fff;border:1px solid var(--line,#e2e8f0);border-top:0;border-radius:0 0 8px 8px;padding:10px 14px;max-height:320px;overflow-y:auto;">
+        <p class="muted">Chưa có thông báo.</p>
+      </div>
+    </details>
+  </div>
 
   <!-- PERSONALIZATION CONTROL BAR — ẩn khỏi UI, giữ input cho JS đọc/ghi preference -->
   <div class="mgr-dashboard" style="display:none;" id="personalizationPanel">
@@ -583,11 +595,13 @@
             <button class="tab active" data-tab="evidence" id="tabButtonEvidence">Nguồn</button>
             <button class="tab" data-tab="ai" id="tabButtonAi">Nhật ký AI</button>
             <button class="tab" data-tab="audit" id="tabButtonAudit">Audit</button>
+            <button class="tab" data-tab="timeline" id="tabButtonTimeline">Timeline</button>
             <button class="tab" data-tab="json" id="tabButtonJson">JSON</button>
           </div>
           <div id="tabEvidence" class="tab-content"><h3>Nguồn chứng minh kết luận</h3><div id="evidenceList" class="evidence-list"><p class="muted">Chưa có nguồn.</p></div></div>
           <div id="tabAi" class="tab-content hidden"><h3>AI Decision Log</h3><p class="muted">Không lưu raw PII, secret hoặc approval token.</p><div id="aiLog" class="log-list"></div></div>
           <div id="tabAudit" class="tab-content hidden"><h3>Audit hash-chain</h3><div id="auditLog" class="log-list"></div></div>
+          <div id="tabTimeline" class="tab-content hidden"><h3>Timeline sự kiện thật (bảng timeline_events)</h3><div id="timelineLog" class="log-list"><p class="muted">Chưa có sự kiện.</p></div></div>
           <div id="tabJson" class="tab-content hidden"><h3>Dữ liệu kỹ thuật JSON</h3><pre id="rawJson">{}</pre></div>
         </section>
       </aside>
@@ -707,6 +721,12 @@
             <h2 id="customerStatusTitle">Chưa gửi thông tin</h2>
             <p id="customerStatusHelp" class="muted">Sau khi gửi, bạn sẽ nhận mã hồ sơ để theo dõi.</p>
             <div id="customerCurrentCase" class="guide-box hidden"></div>
+          </section>
+          <section class="panel" id="customerDocRequestsPanel">
+            <span class="eyebrow">HỒ SƠ CẦN BỔ SUNG</span>
+            <h2 style="margin:4px 0 8px;font-size:15px;">Yêu cầu từ Chuyên viên / RM</h2>
+            <input id="customerDocReplacementInput" type="file" style="display:none;" accept=".pdf,.docx,.xlsx,.txt,.md,.csv,.json">
+            <div id="customerDocRequestsList"><p class="muted">Đang tải...</p></div>
           </section>
           <section class="panel">
             <span class="eyebrow">HỒ SƠ ĐÃ GỬI</span>

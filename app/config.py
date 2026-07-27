@@ -91,8 +91,16 @@ class Settings(BaseModel):
 
     # Enterprise data backend. Empty => local SQLite mirrors (data/mock_database).
     # Set DATABASE_URL to a postgresql:// DSN to use the PostgreSQL
-    # enterprise adapters (app/integrations/pg.py) for CRM/IAM/SSO.
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    # enterprise adapters (app/integrations/pg.py) for CRM/IAM/SSO. Vercel's
+    # own Postgres/Neon storage integration commonly names this env var
+    # POSTGRES_URL (or POSTGRES_PRISMA_URL) instead of DATABASE_URL, so fall
+    # back through those before defaulting to local SQLite mode.
+    DATABASE_URL: str = (
+        os.getenv("DATABASE_URL")
+        or os.getenv("POSTGRES_URL")
+        or os.getenv("POSTGRES_PRISMA_URL")
+        or ""
+    )
 
     # App Settings
     HOST: str = os.getenv("HOST", "0.0.0.0")

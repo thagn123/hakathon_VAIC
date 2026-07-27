@@ -3,7 +3,14 @@
   "builds": [
     {
       "src": "api/index.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "includeFiles": [
+          "app/static/**",
+          "data/mock_database/**",
+          "data/synthetic/**"
+        ]
+      }
     }
   ],
   "routes": [

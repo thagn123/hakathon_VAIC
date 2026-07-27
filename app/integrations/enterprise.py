@@ -5,12 +5,39 @@ Replaces in-memory Mock adapters for production-ready persistence.
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Protocol, TypedDict
 
 from app.integrations.errors import UpstreamTimeoutError, UpstreamUnavailableError
+
+
+def _bundled_enterprise_db_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "data" / "mock_database" / "enterprise_core.sqlite3"
+
+
+def _resolve_enterprise_db_path() -> Path:
+    """On Vercel the deployment bundle is read-only, so sqlite3.connect()
+    can open the checked-in enterprise_core.sqlite3 for reads, but any write
+    raises 'attempt to write a readonly database'. ensure_employee_copilot_
+    demo_personas() below does exactly that (DELETE/INSERT/commit) at module
+    import time (see app/api/v2/employee_router.py's unconditional
+    module-level call), so every cold start crashed the whole function before
+    it could serve a single request -- FUNCTION_INVOCATION_FAILED on every
+    invocation. Mirror the /tmp fallback pattern already used for
+    settings.V2_DB_PATH/VECTOR_DB_DIR/AUDIT_LOG_PATH (app/config.py): copy the
+    bundled, pre-seeded file to /tmp once per cold start and operate on that
+    writable copy instead."""
+    bundled = _bundled_enterprise_db_path()
+    if not os.getenv("VERCEL"):
+        return bundled
+    tmp_path = Path("/tmp/enterprise_core.sqlite3")
+    if not tmp_path.exists():
+        shutil.copyfile(bundled, tmp_path)
+    return tmp_path
 
 class CustomerProfile(TypedDict):
     customer_id: str
@@ -41,7 +68,7 @@ class SSOPort(Protocol):
 class EnterpriseSQLiteBase:
     def __init__(self, db_path: Path | str | None = None, *, fail_for: set[str] | None = None):
         if db_path is None:
-            self.db_path = Path(__file__).resolve().parents[2] / "data" / "mock_database" / "enterprise_core.sqlite3"
+            self.db_path = _resolve_enterprise_db_path()
         else:
             self.db_path = Path(db_path)
         self._fail_for = fail_for or set()
@@ -176,9 +203,7 @@ _EMPLOYEE_COPILOT_DEMO_PERSONAS: list[tuple[str, str, str, list[str], dict]] = [
 
 
 def ensure_employee_copilot_demo_personas(db_path: Path | str | None = None) -> None:
-    path = Path(db_path) if db_path is not None else (
-        Path(__file__).resolve().parents[2] / "data" / "mock_database" / "enterprise_core.sqlite3"
-    )
+    path = Path(db_path) if db_path is not None else _resolve_enterprise_db_path()
     conn = sqlite3.connect(path)
     try:
         cursor = conn.cursor()

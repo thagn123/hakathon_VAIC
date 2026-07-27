@@ -61,7 +61,18 @@ async function api(path,options={}){
   const contentType=response.headers.get("content-type")||"";
   const data=contentType.includes("json")?await response.json():await response.text();
   ui.lastPayload=data;$("rawJson").textContent=JSON.stringify(data,null,2);
-  if(!response.ok){const detail=data?.detail;const error=new Error(detail?.message||detail?.code||data?.message||`HTTP ${response.status}`);error.code=detail?.code||`HTTP_${response.status}`;error.detail=detail;throw error}
+  if(!response.ok){
+    // Two error-detail shapes coexist in the backend by design: most v2
+    // routers return detail={code,message} flat, but employee_router.py's
+    // _error() (specialist reviews, case actions, operational readiness --
+    // 39 call sites, all covered by tests asserting detail.error.code) nests
+    // it as detail={error:{code,message}}. Without this fallback every error
+    // from that router displayed as a useless generic "HTTP_xxx: HTTP xxx"
+    // instead of the real backend message.
+    const detail=data?.detail;const nested=(detail&&typeof detail==="object"&&detail.error)?detail.error:null;
+    const code=detail?.code||nested?.code;const message=detail?.message||nested?.message;
+    const error=new Error(message||code||data?.message||`HTTP ${response.status}`);error.code=code||`HTTP_${response.status}`;error.detail=detail;throw error
+  }
   return data;
 }
 function toast(message,tone="success"){const box=$("toast");box.className=`toast ${tone}`;box.innerHTML=message;clearTimeout(toast.timer);toast.timer=setTimeout(()=>box.classList.add("hidden"),5000)}
